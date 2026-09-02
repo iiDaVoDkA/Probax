@@ -1,24 +1,19 @@
-Cell: ({ original }: { original: Object }) => {
-  if (!original || !original._isParent || !original._hasChildren) {
-    return null;
-  }
+ <span
 
-  return (
-    <span
-      style={{ cursor: 'pointer', userSelect: 'none' }}
-      onClick={e => {
-        e.stopPropagation();
+    style={{
 
-        if (original.id != null) {
-          toggleParent(original.id);
-        }
-      }}
-    >
-      {original._isOpen ? (
-        <Icon slug="chevron-down" />
-      ) : (
-        <Icon slug="chevron-right" />
-      )}
-    </span>
-  );
-}
+      display: 'inline-block',
+
+      transform: original._isOpen
+
+        ? 'rotate(0deg)'
+
+        : 'rotate(-90deg)',
+
+    }}
+
+  >
+
+    <Icon slug="chevron-down" />
+
+  </span>
