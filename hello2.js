@@ -1,12 +1,14 @@
-const teamOptions = useMemo(() => {
-  if (!Array.isArray(teams)) return [];
-
-  return teams
-    .map(team => ({
-      value: team.id,
-      label: team.name,
-    }))
-    .sort((a, b) =>
-      String(a.label ?? "").localeCompare(String(b.label ?? ""))
-    );
-}, [teams]);
+<Dropdown
+  options={teamOptions}
+  value={
+    teamOptions.find(
+      o => String(o.value) === String(draft?.team_id)
+    ) || null
+  }
+  onChange={option =>
+    updateDraft("team_id", option?.value ?? "")
+  }
+  isClearable={false}
+  isSearchable
+  style={{ width: widthColumns[3] - widthColumns[5] }}
+/>
