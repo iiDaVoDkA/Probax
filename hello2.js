@@ -1,14 +1,18 @@
-{
-  Header: <TableHeader label="TEAMS" />,
-  accessor: "team_id",
-
-  style: {
-    flex: "1 1 auto",
-    width: "auto",
-    maxWidth: "none",
-  },
-
-  Cell: ({ value, original }) => {
-    // your team dropdown
-  },
-}
+<Dropdown
+  options={teamOptions}
+  value={
+    teamOptions.find(
+      o => String(o.value) === String(inlineDraft?.team_id)
+    ) || null
+  }
+  onChange={option =>
+    updateInlineDraft(
+      original.template_name,
+      "team_id",
+      option?.value ?? ""
+    )
+  }
+  isClearable={false}
+  isSearchable
+  style={{ width: "100%" }}
+/>
