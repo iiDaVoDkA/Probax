@@ -1,18 +1,20 @@
-<Dropdown
-  options={teamOptions}
-  value={
-    teamOptions.find(
-      o => String(o.value) === String(inlineDraft?.team_id)
-    ) || null
-  }
-  onChange={option =>
+<NewTextArea
+  value={inlineDraft.description || ""}
+  onChange={e =>
     updateInlineDraft(
       original.template_name,
-      "team_id",
-      option?.value ?? ""
+      "description",
+      e.target.value
     )
   }
-  isClearable={false}
-  isSearchable
-  style={{ width: "100%" }}
+  placeholder="Description"
 />
+
+<NewTextArea
+  value={draft?.description ?? ""}
+  onChange={e =>
+    updateDraft("description", e.target.value)
+  }
+  placeholder="Description"
+/>
+import { NewTextArea } from "@component-studio/ui";
