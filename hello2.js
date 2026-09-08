@@ -1,14 +1,14 @@
-<Dropdown
-  options={teamOptions}
-  value={
-    teamOptions.find(
-      o => String(o.value) === String(draft?.team_id)
-    ) || null
-  }
-  onChange={option =>
-    updateDraft("team_id", option?.value ?? "")
-  }
-  isClearable={false}
-  isSearchable
-  style={{ width: widthColumns[3] - widthColumns[5] }}
-/>
+{
+  Header: <TableHeader label="TEAMS" />,
+  accessor: "team_id",
+
+  style: {
+    flex: "1 1 auto",
+    width: "auto",
+    maxWidth: "none",
+  },
+
+  Cell: ({ value, original }) => {
+    // your team dropdown
+  },
+}
