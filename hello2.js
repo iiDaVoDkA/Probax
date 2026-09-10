@@ -1,11 +1,10 @@
-task = TaskRepository.get(task_id)
-
 if UserRoleEnum.SUPER_ADMIN.value in user.get("roles", []):
-    task = TaskRepository.validate(task, user.get("id"))
-else:
-    if not can_modify_task(user, task):
-        raise PermissionError
+    new_project_status = ProjectStatus(status)
 
-    task = validate_task(task, user)
+    with SessionCriticalActionManager(...):  # mêmes paramètres que le bloc existant plus bas
+        ProjectRepository.update(
+            project=project,
+            status=new_project_status,
+        )
 
-return task.to_json(load_task_details=True)
+    return project.to_json(for_project_card=True)
