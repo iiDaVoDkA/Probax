@@ -1,2 +1,2 @@
-is_manager_project: values.isManagerProject === 'true',
-is_manager_initiative: values.isManagerInitiative === 'true',
+isManagerProject: apiUser.is_manager_project,
+isManagerInitiative: apiUser.is_manager_initiative,
