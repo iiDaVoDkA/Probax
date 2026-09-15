@@ -1,2 +1,10 @@
-isManagerProject: apiUser.is_manager_project,
-isManagerInitiative: apiUser.is_manager_initiative,
+is_manager_project: boolean,
+is_manager_initiative: boolean,
+
+
+isManagerProject: boolean,
+isManagerInitiative: boolean,
+
+
+isManagerProject
+isManagerInitiative
