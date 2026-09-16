@@ -1,0 +1,1 @@
+Je pense que meme avec le nouveau flag a true en base, certains tests peuvent encore echouer car ils utilisent des mocks ou le champ est absent. La migration ne modifie pas ces donnees la. Ca pourrait expliquer les erreurs, tu en penses quoi ?
