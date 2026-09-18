@@ -1,1 +1,1 @@
-Salut, juste pour être sur davoir bien compris la logique metier : aujourdhui on peut ajouter un membre dune equipe et le definir comme Main Assessor en cochant la case, meme si son flag manager est false. Avec le nouveau flag is initiative manager, est ce que seuls les membres avec ce flag a true doivent pouvoir etre choisis comme Main Assessor, ou bien ils doivent etre les seuls affiches dans toute la liste ?
+python -c "from dotenv import load_dotenv; import os; load_dotenv(); print(os.getenv('DB_NAME'))"
