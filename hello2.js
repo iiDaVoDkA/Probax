@@ -1,17 +1,5 @@
-
-Object.values(members.byId || {})
-  .filter(member => member.teamIds.includes(selectedTeamId))
-  .filter(member =>
-    (member.firstname + ' ' + member.lastname).includes(filter)
-  )
-  .filter(member => member.roles?.includes(INITIATIVE_ASSESSOR))
-  .map(member => (
-    ...
-  ))
-  
-  
-  .filter(
-  member =>
-    Array.isArray(member.roles) &&
-    member.roles.includes('INITIATIVE_ASSESSOR')
+if (
+    u["is_initiative_manager"]
+    and InitiativeRoleEnum.INITIATIVE_ASSESSOR.value in u["roles"]
+    and any(user_team["id"] == team_id for user_team in u["teams"])
 )
