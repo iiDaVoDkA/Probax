@@ -8,3 +8,10 @@ Object.values(members.byId || {})
   .map(member => (
     ...
   ))
+  
+  
+  .filter(
+  member =>
+    Array.isArray(member.roles) &&
+    member.roles.includes('INITIATIVE_ASSESSOR')
+)
