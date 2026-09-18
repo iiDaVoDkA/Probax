@@ -1,10 +1,10 @@
-is_manager_project: boolean,
-is_manager_initiative: boolean,
 
-
-isManagerProject: boolean,
-isManagerInitiative: boolean,
-
-
-isManagerProject
-isManagerInitiative
+Object.values(members.byId || {})
+  .filter(member => member.teamIds.includes(selectedTeamId))
+  .filter(member =>
+    (member.firstname + ' ' + member.lastname).includes(filter)
+  )
+  .filter(member => member.roles?.includes(INITIATIVE_ASSESSOR))
+  .map(member => (
+    ...
+  ))
