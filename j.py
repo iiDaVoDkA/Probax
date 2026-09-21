@@ -78,3 +78,16 @@ const CommitteeDateCellComponent = ({
     </div>
   );
 };
+
+
+
+
+const CommitteeDateCell = connect(
+  state => ({
+    user: selectUserState(state),
+  }),
+  dispatch => ({
+    updateInitiative: (initiativeId: string, values: any) =>
+      dispatch(updateInitiativePipeline(initiativeId, values)),
+  }),
+)(CommitteeDateCellComponent);
