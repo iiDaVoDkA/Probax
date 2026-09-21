@@ -1,3 +1,23 @@
+
+const handleSave = (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+
+  updateInitiative(original.id, {
+    id: original.id,
+
+    initiativeCommitteeIdentifier: {
+      ...original.initiativeCommitteeIdentifier,
+      committeeInitiativeIdentifier: editedValue,
+    },
+  });
+
+  setIsEditing(false);
+};
+
+
+
+
 const CommitteeIdCellComponent = ({
   original,
   value,
