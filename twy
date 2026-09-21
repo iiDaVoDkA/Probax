@@ -4,4 +4,22 @@ const CommitteeDateCellComponent = ({ value }: any) => (
   </div>
 );
 
-const CommitteeDateCell = CommitteeDateCellComponent;
+const CommitteeDateCell = CommitteeDateCellComponen
+
+
+
+Cell: (row: any) => (
+  <span>
+    {row.value || '-'}
+
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        console.log('EDIT COMMITTEE DATE');
+      }}
+    >
+      ✎
+    </button>
+  </span>
+),
