@@ -1,1 +1,7 @@
-grep -R "ibmclouddb" -n . --exclude-dir=.venv --exclude-dir=.git
+const CommitteeDateCellComponent = ({ value }: any) => (
+  <div>
+    {value || '-'} ✎
+  </div>
+);
+
+const CommitteeDateCell = CommitteeDateCellComponent;
