@@ -1,8 +1,8 @@
-// ===============================
-// COMMITTEE ID INLINE EDIT CELL
-// ===============================
-
-const CommitteeIdCell = ({ original, value }: any) => {
+const CommitteeIdCellComponent = ({
+  original,
+  value,
+  updateInitiative,
+}: any) => {
   const [isEditing, setIsEditing] = React.useState(false);
   const [editedValue, setEditedValue] = React.useState(value || '');
 
@@ -26,10 +26,13 @@ const CommitteeIdCell = ({ original, value }: any) => {
     event.preventDefault();
     event.stopPropagation();
 
-    // BACKEND UPDATE WILL BE ADDED HERE AFTER
-    // WE CONFIRM THE REAL API FIELD NAME.
-    console.log('initiative:', original.id);
-    console.log('new committee id:', editedValue);
+    updateInitiative(original.id, {
+      id: original.id,
+
+      // IMPORTANT:
+      // verify that this is the REAL writable backend field
+      committeeIdentifier: editedValue,
+    });
 
     setIsEditing(false);
   };
@@ -83,16 +86,20 @@ const CommitteeIdCell = ({ original, value }: any) => {
 };
 
 
-// ===============================
-// REPLACE YOUR CURRENT
-// COMMITTEE_ID_COLUMN WITH THIS
-// ===============================
+// SAME REDUX UPDATE MECHANISM AS STATUS CELL
+const CommitteeIdCell = connect(
+  null,
+  dispatch => ({
+    updateInitiative: (initiativeId: string, values: any) =>
+      dispatch(updateInitiativePipeline(initiativeId, values)),
+  }),
+)(CommitteeIdCellComponent);
+
 
 [COMMITTEE_ID_COLUMN]: {
   Header: (
     <TableHeader label="INITIATIVE.PIPELINE.COMMITTEE_IDENTIFIER" />
   ),
-
   accessor: '_committeeIdentifier',
 
   Cell: (props: any) => (
