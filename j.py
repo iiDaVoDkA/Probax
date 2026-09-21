@@ -1,35 +1,35 @@
-Cell: (props: any) => (
-  <CommitteeDateCell
-    key={`committee-date-${props.original.id}`}
-    original={props.original}
-    value={props.value}
-  />
-),
+// ===============================
+// COMMITTEE ID INLINE EDIT CELL
+// ===============================
 
-
-const CommitteeDateCellComponent = ({
-  original,
-  value,
-  updateInitiative,
-}: any) => {
+const CommitteeIdCell = ({ original, value }: any) => {
   const [isEditing, setIsEditing] = React.useState(false);
   const [editedValue, setEditedValue] = React.useState(value || '');
 
-  const handleEdit = () => {
+  const handleEdit = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
     setEditedValue(value || '');
     setIsEditing(true);
   };
 
-  const handleCancel = () => {
+  const handleCancel = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
     setEditedValue(value || '');
     setIsEditing(false);
   };
 
-  const handleSave = () => {
-    updateInitiative(original.id, {
-      committeeDate: editedValue,
-      id: original.id,
-    });
+  const handleSave = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    // BACKEND UPDATE WILL BE ADDED HERE AFTER
+    // WE CONFIRM THE REAL API FIELD NAME.
+    console.log('initiative:', original.id);
+    console.log('new committee id:', editedValue);
 
     setIsEditing(false);
   };
@@ -43,11 +43,13 @@ const CommitteeDateCellComponent = ({
           justifyContent: 'center',
           gap: 6,
         }}
+        onClick={(event) => event.stopPropagation()}
       >
         <input
-          type="date"
-          value={editedValue || ''}
-          onChange={event => setEditedValue(event.target.value)}
+          type="text"
+          value={editedValue}
+          onClick={(event) => event.stopPropagation()}
+          onChange={(event) => setEditedValue(event.target.value)}
         />
 
         <button type="button" onClick={handleSave}>
@@ -69,6 +71,7 @@ const CommitteeDateCellComponent = ({
         justifyContent: 'center',
         gap: 6,
       }}
+      onClick={(event) => event.stopPropagation()}
     >
       <span>{value || '-'}</span>
 
@@ -80,14 +83,27 @@ const CommitteeDateCellComponent = ({
 };
 
 
+// ===============================
+// REPLACE YOUR CURRENT
+// COMMITTEE_ID_COLUMN WITH THIS
+// ===============================
 
+[COMMITTEE_ID_COLUMN]: {
+  Header: (
+    <TableHeader label="INITIATIVE.PIPELINE.COMMITTEE_IDENTIFIER" />
+  ),
 
-const CommitteeDateCell = connect(
-  state => ({
-    user: selectUserState(state),
-  }),
-  dispatch => ({
-    updateInitiative: (initiativeId: string, values: any) =>
-      dispatch(updateInitiativePipeline(initiativeId, values)),
-  }),
-)(CommitteeDateCellComponent);
+  accessor: '_committeeIdentifier',
+
+  Cell: (props: any) => (
+    <CommitteeIdCell
+      original={props.original}
+      value={props.value}
+    />
+  ),
+
+  minWidth: NumberGrid(20),
+  className: 'center',
+  Filter: () => null,
+  sortable: false,
+},
