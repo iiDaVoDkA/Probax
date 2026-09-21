@@ -1,17 +1,28 @@
-deactivate
+[INITIATIVE_EDIT_COLUMN]: {
+  Header: <TableHeader label="INITIATIVE_EDIT" sortable={false} />,
+  id: 'initiativeEdit',
+  minWidth: NumberGrid(12),
+  className: 'center',
 
-brew install python@3.12
+  Cell: ({ original }: any) => {
+    const canEdit =
+      isAdmin ||
+      original.initiativeOwnerId === user.id;
 
-mv venv venv-py311-backup
+    if (!canEdit) {
+      return null;
+    }
 
-$(brew --prefix python@3.12)/bin/python3.12 -m venv venv
+    return (
+      <IconButton
+        hoverColor={BNPColors.ceruleanBlue}
+        onClick={() => onEditInitiative(original)}
+      >
+        <Icon slug="pen" size={16} />
+      </IconButton>
+    );
+  },
 
-source venv/bin/activate
-
-python --version
-
-python -m pip install --upgrade pip
-
-pip install -r requirements.txt
-
-uvicorn app.main:app --reload --port 8000
+  sortable: false,
+  filterable: false,
+},
