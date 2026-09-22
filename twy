@@ -1,1 +1,139 @@
-Salut, pour tester le ticket Super Admin, il faudrait idéalement trouver des projects/tasks similaires où l’action est normalement bloquée pour un Admin, puis vérifier qu’elle passe avec un SUPER_ADMIN. Ismail m’avait donné cet exemple de task que j’ai déjà pu valider avec le Super Admin, je te l’envoie comme référence.
+Yes. Add the permission in the cell component, and also guard handleSave so someone cannot bypass the hidden pen.
+
+I would do it like this.
+
+First, in CommitteeDateCellComponent, add user to the props:
+
+const CommitteeDateCellComponent = ({
+  original,
+  value,
+  updateInitiative,
+  getInitiativePipeline,
+  user,
+}: any) => {
+
+Then, just after your useStates, add:
+
+const isAdmin = (user?.roles || []).includes('ADMIN');
+// IMPORTANT:
+// use the real owner id field from your row here
+const isInitiativeOwner =
+  original?.initiativeOwnerId === user?.id;
+const canEdit = isAdmin || isInitiativeOwner;
+
+So the beginning becomes:
+
+const CommitteeDateCellComponent = ({
+  original,
+  value,
+  updateInitiative,
+  getInitiativePipeline,
+  user,
+}: any) => {
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [editedValue, setEditedValue] = React.useState(value || '');
+  const [isInvalidDateModalOpen, setIsInvalidDateModalOpen] =
+    React.useState(false);
+  const isAdmin = (user?.roles || []).includes('ADMIN');
+  const isInitiativeOwner =
+    original?.initiativeOwnerId === user?.id;
+  const canEdit = isAdmin || isInitiativeOwner;
+
+Then, in handleEdit, protect it:
+
+const handleEdit = () => {
+  if (!canEdit) return;
+  setEditedValue(value || '');
+  setIsEditing(true);
+};
+
+And at the very beginning of handleSave:
+
+const handleSave = () => {
+  if (!canEdit) return;
+  const committeeDates = original?.committeeDates || [];
+  // ... keep the rest of your current handleSave
+};
+
+Then in your normal display return, show the pen only for authorized users:
+
+return (
+  <div
+    style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+    }}
+  >
+    <span>{value || '-'}</span>
+    {canEdit && (
+      <button
+        type="button"
+        onClick={handleEdit}
+      >
+        ✎
+      </button>
+    )}
+  </div>
+);
+
+Finally, make sure your connect gives the component the current user:
+
+const CommitteeDateCell = connect(
+  state => ({
+    user: selectUserState(state),
+  }),
+  dispatch => ({
+    updateInitiative: (initiativeId: string, values: any) =>
+      dispatch(updateInitiativePipeline(initiativeId, values)),
+    getInitiativePipeline: () =>
+      dispatch(getInitiativePipeline()),
+  }),
+)(CommitteeDateCellComponent);
+
+So the behavior becomes:
+
+ADMIN
+→ sees ✎
+→ can edit
+Initiative Owner of THIS row
+→ sees ✎
+→ can edit
+Anyone else
+→ sees only the date
+→ no ✎
+→ cannot enter edit mode
+
+One thing you must verify
+
+This line:
+
+original?.initiativeOwnerId === user?.id
+
+is the only field name I don’t want you to blindly copy.
+
+Your table currently has:
+
+accessor: 'initiativeOwner'
+
+but that looks like the display value. Inspect:
+
+console.log(original);
+
+and find the actual owner identifier. It may be something like:
+
+original.initiativeOwner.id
+
+instead of:
+
+original.initiativeOwnerId
+
+If it is nested, then simply use:
+
+const isInitiativeOwner =
+  original?.initiativeOwner?.id === user?.id;
+
+Do the same canEdit logic in the Committee ID cell afterward.
+
+And even with this frontend check, keep the backend authorization too; hiding the pen is UX, while the API must remain the actual security check.
