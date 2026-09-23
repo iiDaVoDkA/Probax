@@ -1,4 +1,26 @@
-const [dateError, setDateError] = React.useState('');
+
+const rowCommitteeId = original.__committeeId;
+
+const committeeIndex = committees.findIndex(
+  committee =>
+    rowCommitteeId !== undefined &&
+    rowCommitteeId !== null &&
+    String(committee.id) === String(rowCommitteeId),
+);
+
+if (committeeIndex === -1) {
+  setDateError(
+    `Row ID: ${JSON.stringify(rowCommitteeId)}; ` +
+    `Available IDs: ${JSON.stringify(
+      committees.map(committee => committee.id),
+    )}`,
+  );
+  return;
+}
+
+
+
+
 
 const handleSave = () => {
   setDateError('');
