@@ -1,24 +1,29 @@
 const handleSave = () => {
-  const preCommitteeDates = original?.committeeDates || [];
+  const nbCommittees =
+    original?.initiativeGovernance?.committees?.length;
 
-  const lastPreCommitteeDate =
-    preCommitteeDates.length > 0
-      ? preCommitteeDates[preCommitteeDates.length - 1]
-      : null;
+  const selectedDate = new Date(editedValue);
 
-  // Same constraint as Initiative Description:
-  // Committee Date must be strictly after the last Pre-Committee Date.
-  if (
-    lastPreCommitteeDate &&
-    new Date(editedValue) <= new Date(lastPreCommitteeDate)
-  ) {
-    setIsInvalidDateModalOpen(true);
-    return;
+  if (nbCommittees === 2) {
+    const pre1 = original?.committeeDates?.[0];
+
+    if (pre1 && selectedDate <= new Date(pre1)) {
+      setIsInvalidDateModalOpen(true);
+      return;
+    }
+  }
+
+  if (nbCommittees === 3) {
+    const pre2 = original?.committeeDates?.[1];
+
+    if (pre2 && selectedDate <= new Date(pre2)) {
+      setIsInvalidDateModalOpen(true);
+      return;
+    }
   }
 
   updateInitiative(original.id, {
     committeeDate: editedValue,
-    committeeDates: preCommitteeDates,
     id: original.id,
     updatedFromGlobalScreen: true,
   });
