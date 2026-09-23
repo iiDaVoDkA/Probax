@@ -1,11 +1,19 @@
-<span
+
+<input
+  type="date"
+  value={editedValue || ''}
+  aria-invalid={Boolean(dateError)}
   style={{
     fontSize: 14,
-    lineHeight: '18px',
-    whiteSpace: 'nowrap',
+    fontFamily: 'inherit',
+    fontWeight: 400,
+    width: 125,
+    height: 26,
+    padding: '2px 4px',
+    boxSizing: 'border-box',
   }}
->
-  {value || '-'}
-</span>
-
-
+  onChange={event => {
+    setEditedValue(event.target.value);
+    setDateError('');
+  }}
+/>
