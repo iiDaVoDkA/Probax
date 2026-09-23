@@ -1,3 +1,11 @@
+git fetch origin
+git status -sb
+git log --oneline @{u}..HEAD
+git diff --stat origin/develop...HEAD
+
+
+
+
 const {
   committeeIdentifierToCreate,
   ...initiativePipeline
