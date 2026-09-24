@@ -1,4 +1,31 @@
+Read the attached file only. Do not edit anything.
 
+Find the function using is_manager_initiative.
+
+Show:
+1. How it selects an assessor.
+2. Whether it also checks the Initiative Assessor role.
+3. What happens when no user matches.
+4. Where the selected user is saved or sent.
+
+Include the function name and relevant code.
+If another function is called, give its exact name so I can
+attach its file next. Do not guess what that function does.
+
+Read the attached code only. Do not edit anything.
+
+We need to understand how a task stores its assignment.
+
+Show:
+1. The task model/class name.
+2. The exact field storing the assigned user.
+3. Any field linking the task to a team or assessment.
+4. Whether assignment is one user or a collection.
+
+Include the relevant code snippets.
+If a related model is defined elsewhere, give its exact
+class name so I can attach that file next.
+Do not propose changes or invent missing fields.
   
 Read-only investigation. Do not modify code.
 
