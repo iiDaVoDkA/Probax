@@ -1,3 +1,11 @@
+Then update these behaviors:
+
+* No eligible manager: set is_team_assigned = True, leave main_assessor = None, notify the team mailbox.
+* Team access: require the flag and membership in that team and Initiative Assessor role.
+* Someone claims: set main_assessor to their user ID and is_team_assigned = False together.
+
+
+
 The target: a task belongs to the team until someone takes ownership. Then the existing individual workflow applies.
 
 This is our proposed implementation, using the relationships you already have.
