@@ -1,0 +1,65 @@
+The target: a task belongs to the team until someone takes ownership. Then the existing individual workflow applies.
+
+This is our proposed implementation, using the relationships you already have.
+
+Situation	Before	After
+Team has an Initiative Manager with Initiative Assessor role	Automatically select that person as Main Assessor.	Same behavior.
+No eligible Initiative Manager	No automatic Main Assessor; manual assignment is needed.	Mark the task as assigned to the team, with no individual Main Assessor.
+Before someone takes ownership	An empty Main Assessor does not explicitly identify a team assignment.	All members of the assigned team with the Initiative Assessor role can access the task.
+Notification for the team fallback	Team fallback notification is not established from the code shown.	Send the notification to the team’s generic mailbox, found through its is_team user.
+Alice assigns the task to herself	Existing individual assignment mechanism.	Reuse that mechanism: set Alice as Main Assessor and remove the team-assigned state.
+After Alice takes ownership	Existing individual visibility rules.	Alice sees it in My Tasks. Bob and John lose access provided by the team assignment.
+
+How we would represent this in the database
+
+Keep your existing structure:
+
+* InitiativeTeamRelationship identifies which team participates in which initiative.
+* The task’s relationship_id points to that relationship.
+* main_assessor identifies the individually assigned person.
+
+Our proposed addition is is_team_assigned on the task:
+
+Task state	relationship_id	main_assessor	Proposed is_team_assigned
+Ordinary unassigned task	42	NULL	False
+Task available to Team 3	42	NULL	True
+Alice takes ownership	42	Alice’s ID	False
+
+That distinction is why we proposed the flag: an empty Main Assessor alone does not tell us whether team access is intended. If an existing field already expresses this reliably, we can reuse it.
+
+Your implementation checklist, in order
+
+1. Task model + Python migration: add the proposed Boolean to InitiativeTask, with a database default of False. Existing tasks remain False.
+2. Automatic assignment code: preserve the manager-plus-role selection. For the fallback, keep the team relationship, leave main_assessor empty and set the flag to True.
+3. Backend access checks: recognize team assignment and check both actual team membership and Initiative Assessor role. Do not assume InitiativeTeamMembers contains every eligible team member.
+4. Existing self-assignment code: set the person and clear the flag together. If two people claim simultaneously, only one succeeds.
+5. Notification recipient selection: use the generic team mailbox while team-assigned.
+6. API response and interface: expose the assignment state, show the team assignment and support taking ownership.
+7. Verify: manager assignment, team fallback, unauthorized users, claiming and two simultaneous claims.
+
+Two boundaries from the business reply: shared editing/completion before claiming is still unconfirmed, and My Tasks is explicitly confirmed after claiming. Don’t expand those behaviors automatically.
+
+Start with item 1, once you have located the migration history that owns the task table.
+
+flowchart TD
+    A["Team added"] --> B{"Eligible manager?"}
+    B -- Yes --> C["Assign manager"]
+    B -- No --> D["No automatic assignment"]
+    D --> E["Choose an assessor manually"]
+
+
+
+flowchart TD
+    A["Team added"] --> B{"Eligible manager?"}
+    B -- Yes --> C["Assign manager"]
+    B -- No --> D["Assign to team"]
+    D --> E["Notify generic team mailbox"]
+    D --> F["All team Initiative Assessors can access"]
+    F --> G["Alice takes ownership"]
+    G --> H["Alice becomes Main Assessor"]
+    H --> I["Visible in Alice's My Tasks"]
+    H --> J["Access through team assignment ends"]
+
+
+
+
