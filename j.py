@@ -1,129 +1,91 @@
+This caller controls which initiatives an assessor can see. It filters relationships twice, so we must include team assignment in both places.
 
-roles = user.get("roles") or []
+We can reuse get_user_teams_by_user_id(user), which already appears in this file, to get the logged-in user’s actual teams.
 
-has_privileged_role = any(
-    role in roles
-    for role in [
-        InitiativeRoleEnum.INITIATIVE_OWNER.value,
-        InitiativeRoleEnum.INITIATIVE_COORDINATOR.value,
-        "ADMIN",
-    ]
-)
+Make these changes:
 
-is_assessor = (
-    InitiativeRoleEnum.INITIATIVE_ASSESSOR.value in roles
-)
+1. In src/repositories/task.py, add this new method below get_by_main_assessor().
+    Add the model import if it is absent:
 
-is_selected_assessor = (
-    user["id"] == initiative_team_relationship.accountant_id
-)
+from models.initiative_team_relationship import InitiativeTeamRelationship
 
-can_edit_as_team_member = False
+    Then add:
 
-if (
-    not has_privileged_role
-    and is_assessor
-    and task.get("is_team_assigned", False)
-    and task.get("main_assessor") is None
-    and initiative_team_relationship.accountant_id is None
-    and initiative_team_relationship.team_id is not None
-):
-    current_member = next(
-        (
-            member
-            for member in get_users()
-            if member["id"] == user["id"]
-        ),
-        None,
-    )
-
-    if current_member is not None:
-        can_edit_as_team_member = any(
-            team["id"] == initiative_team_relationship.team_id
-            for team in current_member["teams"]
+@staticmethod
+def get_team_assigned_relationship_ids(team_ids):
+    """Get relationship IDs containing unclaimed team-assigned tasks."""
+    if not team_ids:
+        return []
+    relationship_ids = (
+        db.session.query(InitiativeTask.relationship_id)
+        .join(
+            InitiativeTeamRelationship,
+            InitiativeTask.relationship_id
+            == InitiativeTeamRelationship.id,
         )
-
-if not (
-    has_privileged_role
-    or (
-        is_assessor
-        and (is_selected_assessor or can_edit_as_team_member)
+        .filter(
+            InitiativeTask.is_team_assigned.is_(True),
+            InitiativeTask.main_assessor.is_(None),
+            InitiativeTeamRelationship.accountant_id.is_(None),
+            InitiativeTeamRelationship.team_id.in_(team_ids),
+        )
+        .distinct()
+        .all()
     )
-):
-    raise InitiativeTaskNotEditableByUserError(user["id"])
+    return [rel_id[0] for rel_id in relationship_ids]
 
-# Team editing must not change assignment through this endpoint.
-if can_edit_as_team_member:
-    protected_fields = (
-        "relationship_id",
-        "main_assessor",
-        "is_team_assigned",
-    )
+    Why: this finds team-assigned tasks belonging to the user’s teams. Checking both individual-assignment fields prevents the fallback from granting access after someone takes ownership.
+2. In src/resources/initiative/initiative.py, inside the existing Initiative Assessor branch, find:
 
-    if any(
-        field in payload and payload[field] != task.get(field)
-        for field in protected_fields
-    ):
-        raise InitiativeTaskNotEditableByUserError(user["id"])
-
-
-
-
-
-
-
-
-users = get_users()
-assessor_users = get_users_by_role(
-    InitiativeRoleEnum.INITIATIVE_ASSESSOR.value
+relationships_id_linked_to_main_assessor = (
+    InitiativeTaskRepository.get_by_main_assessor(user.get("id"))
 )
-assessor_ids = {
-    assessor["user_id"] for assessor in assessor_users
-}
 
-for payload in payloads:
-    team_relationship = (
-        InitiativeTeamRelationshipRepository
-        .get_by_relationship_ids(
-            [payload["relationship_id"]]
-        )[0]
+    Your existing line may be formatted on one line. Immediately after it, add:
+
+team_ids = [
+    user_team.get("team_id")
+    for user_team in get_user_teams_by_user_id(user)
+]
+team_assigned_relationship_ids = (
+    InitiativeTaskRepository.get_team_assigned_relationship_ids(
+        team_ids
     )
+)
 
-    # Preserve an individual assignment and require a real team.
-    payload["is_team_assigned"] = False
+    Why: the surrounding branch already checks the Initiative Assessor role; this adds their team membership.
+3. Replace the following initiative_relationships = ... block with:
 
-    if (
-        team_relationship.team_id is not None
-        and team_relationship.accountant_id is None
-        and payload.get("main_assessor") is None
-    ):
-        has_eligible_manager = any(
-            member["is_initiative_manager"]
-            and member["id"] in assessor_ids
-            and any(
-                team["id"] == team_relationship.team_id
-                for team in member["teams"]
+initiative_relationships = (
+    InitiativeTeamRelationshipRepository.get_by_relationship_ids(
+        list(
+            set(
+                relationship_ids
+                + relationships_id_linked_to_main_assessor
+                + team_assigned_relationship_ids
             )
-            for member in users
         )
-
-        payload["is_team_assigned"] = not has_eligible_manager
-
-# Keep the existing first-task individual notification.
-relationship_id = payloads[0]["relationship_id"]
-team_relationship = (
-    InitiativeTeamRelationshipRepository
-    .get_by_relationship_ids([relationship_id])[0]
+    )
 )
 
-if team_relationship.accountant_id is not None:
-    plm_user = get_users_by_user_id(
-        [team_relationship.accountant_id]
-    )
-    if plm_user:
-        send_email_task_assessor_assigned(
-            payloads[0]["task_name"],
-            plm_user[0].get("email"),
-        )
+    Why: an eligible team member might have no individual entry in InitiativeTeamMembers. Their team-assigned relationships must be included independently.
+4. Replace the following assessor_initiative_relationships = [...] block with:
 
-return InitiativeTaskRepository.create_tasks(payloads)
+assessor_initiative_relationships = [
+    assessor_initiative_relationship
+    for assessor_initiative_relationship in initiative_relationships
+    if (
+        assessor_initiative_relationship.accountant_id
+        == user.get("id")
+        or assessor_initiative_relationship.id
+        in relationships_id_linked_to_main_assessor
+        or assessor_initiative_relationship.id
+        in team_assigned_relationship_ids
+    )
+]
+
+    Why: without that final or, this second filter would remove the team-assigned relationships we just added.
+
+This covers initiative-list visibility. We still need to trace the actual My Tasks fetch and its task-level filtering.
+
+After these edits, send the saga handling fetchTasksByUserId under src/redux/entities/initiativeTasks. That will show the request used for Initiative My Tasks.
