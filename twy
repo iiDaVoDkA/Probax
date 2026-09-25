@@ -1,100 +1,11 @@
-Read the attached file only. Do not edit anything.
-
-Find the function using is_manager_initiative.
-
-Show:
-1. How it selects an assessor.
-2. Whether it also checks the Initiative Assessor role.
-3. What happens when no user matches.
-4. Where the selected user is saved or sent.
-
-Include the function name and relevant code.
-If another function is called, give its exact name so I can
-attach its file next. Do not guess what that function does.
-
-Read the attached code only. Do not edit anything.
-
-We need to understand how a task stores its assignment.
-
-Show:
-1. The task model/class name.
-2. The exact field storing the assigned user.
-3. Any field linking the task to a team or assessment.
-4. Whether assignment is one user or a collection.
-
-Include the relevant code snippets.
-If a related model is defined elsewhere, give its exact
-class name so I can attach that file next.
-Do not propose changes or invent missing fields.
-  
-Read-only investigation. Do not modify code.
-
-Find the database model for Initiative tasks and how their
-assignees are stored. Focus on Initiative, not Project tasks.
-
-Return:
-1. The model file path and class name.
-2. The exact fields or relationships linking a task to:
-   - an assigned user;
-   - a team;
-   - an assessment.
-3. Any separate assignment model used by those relationships.
-
-Include only the relevant code snippets.
-If something is not found, say so. Do not guess or propose changes.
-
-
-
-
-    updateInitiative: (initiativeId: string, values: any) =>
-      dispatch(updateInitiativePipeline(initiativeId, values)),
-    getInitiativePipeline: () =>
-      dispatch(getInitiativePipeline()),
-  }),
-)(CommitteeDateCellComponent);
-
-So the behavior becomes:
-
-ADMIN
-→ sees ✎
-→ can edit
-Initiative Owner of THIS row
-→ sees ✎
-→ can edit
-Anyone else
-→ sees only the date
-→ no ✎
-→ cannot enter edit mode
-
-One thing you must verify
-
-This line:
-
-original?.initiativeOwnerId === user?.id
-
-is the only field name I don’t want you to blindly copy.
-
-Your table currently has:
-
-accessor: 'initiativeOwner'
-
-but that looks like the display value. Inspect:
-
-console.log(original);
-
-and find the actual owner identifier. It may be something like:
-
-original.initiativeOwner.id
-
-instead of:
-
-original.initiativeOwnerId
-
-If it is nested, then simply use:
-
-const isInitiativeOwner =
-  original?.initiativeOwner?.id === user?.id;
-
-Do the same canEdit logic in the Committee ID cell afterward.
-
-And even with this frontend check, keep the backend authorization too; hiding the pen is UX, while the API must remain the actual security check.
+<pre style={{ color: 'red', whiteSpace: 'pre-wrap' }}>
+  {JSON.stringify(
+    {
+      errors: this.props.errors,
+      submitCount: this.props.submitCount,
+      isValidating: this.props.isValidating,
+    },
+    null,
+    2,
+  )}
+</pre>
