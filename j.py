@@ -1,136 +1,55 @@
 
-const handleSave = (event) => {
-  event.preventDefault();
-  event.stopPropagation();
+users = get_users()
+assessor_users = get_users_by_role(
+    InitiativeRoleEnum.INITIATIVE_ASSESSOR.value
+)
+assessor_ids = {
+    assessor["user_id"] for assessor in assessor_users
+}
 
-  updateInitiative(original.id, {
-    id: original.id,
+for payload in payloads:
+    team_relationship = (
+        InitiativeTeamRelationshipRepository
+        .get_by_relationship_ids(
+            [payload["relationship_id"]]
+        )[0]
+    )
 
-    initiativeCommitteeIdentifier: {
-      ...original.initiativeCommitteeIdentifier,
-      committeeInitiativeIdentifier: editedValue,
-    },
-  });
+    # Preserve an individual assignment and require a real team.
+    payload["is_team_assigned"] = False
 
-  setIsEditing(false);
-};
+    if (
+        team_relationship.team_id is not None
+        and team_relationship.accountant_id is None
+        and payload.get("main_assessor") is None
+    ):
+        has_eligible_manager = any(
+            member["is_initiative_manager"]
+            and member["id"] in assessor_ids
+            and any(
+                team["id"] == team_relationship.team_id
+                for team in member["teams"]
+            )
+            for member in users
+        )
 
+        payload["is_team_assigned"] = not has_eligible_manager
 
+# Keep the existing first-task individual notification.
+relationship_id = payloads[0]["relationship_id"]
+team_relationship = (
+    InitiativeTeamRelationshipRepository
+    .get_by_relationship_ids([relationship_id])[0]
+)
 
+if team_relationship.accountant_id is not None:
+    plm_user = get_users_by_user_id(
+        [team_relationship.accountant_id]
+    )
+    if plm_user:
+        send_email_task_assessor_assigned(
+            payloads[0]["task_name"],
+            plm_user[0].get("email"),
+        )
 
-const CommitteeIdCellComponent = ({
-  original,
-  value,
-  updateInitiative,
-}: any) => {
-  const [isEditing, setIsEditing] = React.useState(false);
-  const [editedValue, setEditedValue] = React.useState(value || '');
-
-  const handleEdit = (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-
-    setEditedValue(value || '');
-    setIsEditing(true);
-  };
-
-  const handleCancel = (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-
-    setEditedValue(value || '');
-    setIsEditing(false);
-  };
-
-  const handleSave = (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-
-    updateInitiative(original.id, {
-      id: original.id,
-
-      // IMPORTANT:
-      // verify that this is the REAL writable backend field
-      committeeIdentifier: editedValue,
-    });
-
-    setIsEditing(false);
-  };
-
-  if (isEditing) {
-    return (
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 6,
-        }}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <input
-          type="text"
-          value={editedValue}
-          onClick={(event) => event.stopPropagation()}
-          onChange={(event) => setEditedValue(event.target.value)}
-        />
-
-        <button type="button" onClick={handleSave}>
-          ✓
-        </button>
-
-        <button type="button" onClick={handleCancel}>
-          ✕
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-      }}
-      onClick={(event) => event.stopPropagation()}
-    >
-      <span>{value || '-'}</span>
-
-      <button type="button" onClick={handleEdit}>
-        ✎
-      </button>
-    </div>
-  );
-};
-
-
-// SAME REDUX UPDATE MECHANISM AS STATUS CELL
-const CommitteeIdCell = connect(
-  null,
-  dispatch => ({
-    updateInitiative: (initiativeId: string, values: any) =>
-      dispatch(updateInitiativePipeline(initiativeId, values)),
-  }),
-)(CommitteeIdCellComponent);
-
-
-[COMMITTEE_ID_COLUMN]: {
-  Header: (
-    <TableHeader label="INITIATIVE.PIPELINE.COMMITTEE_IDENTIFIER" />
-  ),
-  accessor: '_committeeIdentifier',
-
-  Cell: (props: any) => (
-    <CommitteeIdCell
-      original={props.original}
-      value={props.value}
-    />
-  ),
-
-  minWidth: NumberGrid(20),
-  className: 'center',
-  Filter: () => null,
-  sortable: false,
-},
+return InitiativeTaskRepository.create_tasks(payloads)
