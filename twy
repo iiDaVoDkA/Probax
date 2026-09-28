@@ -1,10 +1,5 @@
-} catch (error) {
-  window.alert(JSON.stringify({
-    message: error?.message ?? String(error),
-    status: error?.response?.status,
-    response: error?.response?.data,
-    stack: error?.stack,
-  }, null, 2));
-
-  yield put(fetchInitiativeTasksError(error));
+componentDidCatch(error, info) {
+  window.alert(
+    error?.stack || error?.message || String(error)
+  );
 }
