@@ -1,30 +1,18 @@
+<Style.ConfirmButton
+  type="button"
+  label={<FormattedMessage id={submitButtonLabel} />}
+  mediumFont
+  disabled={editedTask && editedTask.status === TASK_STATUS_DONE}
+  onClick={async () => {
+    this.props.setStatus('Starting Formik submission');
 
-formikBag.setStatus('Submit handler reached');
-
-try {
-  createTasks(values, initiative);
-  formikBag.setStatus('Create action dispatched');
-  closeInitiativeTaskForm();
-} catch (error) {
-  formikBag.setStatus(`Submit error: ${error.message}`);
-}
-
-
-status: this.props.status 
-?? 'Submit handler not reached',
-
-<pre style={{ color: 'red', whiteSpace: 'pre-wrap' }}>
-  {JSON.stringify(
-    {
-      errors: this.props.errors,
-      errorFields: Object.keys(this.props.errors || {}),
-      submitCount: this.props.submitCount,
-      isSubmitting: this.props.isSubmitting,
-      isValidating: this.props.isValidating,
-      status: this.props.status ?? 'Submit handler not reached',
-    },
-    null,
-    2,
-  )}
-</pre>
-
+    try {
+      await this.props.submitForm();
+    } catch (error) {
+      this.props.setStatus(
+        `Formik error: ${error.message || String(error)}`,
+      );
+      this.props.setSubmitting(false);
+    }
+  }}
+/>
