@@ -1,5 +1,34 @@
-componentDidCatch(error, info) {
-  window.alert(
-    error?.stack || error?.message || String(error)
+.filter(task => {
+  const relationship = relById[task.teamInitiativeRelationshipId];
+  const isClosed = ['DONE', 'CANCELED'].includes(task.status);
+
+  if (isClosed && task.lastAssessor) {
+    return user.id === task.lastAssessor;
+  }
+
+  const isMainAssessor = user.id === task.mainAssessor;
+
+  const isRelationshipAssessor =
+    !task.mainAssessor &&
+    teamMembers.some(teamMember =>
+      teamMember.teamInitiativeRelationshipId ===
+        task.teamInitiativeRelationshipId &&
+      teamMember.userId === user.id &&
+      user.id === relationship?.accountantId
+    );
+
+  const isEligibleTeamAssessor =
+    !isClosed &&
+    task.isTeamAssigned === true &&
+    task.mainAssessor == null &&
+    relationship?.accountantId == null &&
+    relationship?.teamId != null &&
+    (user.roles ?? []).includes('INITIATIVE_ASSESSOR') &&
+    (user.teamIds ?? []).includes(relationship.teamId);
+
+  return (
+    isMainAssessor ||
+    isRelationshipAssessor ||
+    isEligibleTeamAssessor
   );
-}
+});
