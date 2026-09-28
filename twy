@@ -1,11 +1,10 @@
-<pre style={{ color: 'red', whiteSpace: 'pre-wrap' }}>
-  {JSON.stringify(
-    {
-      errors: this.props.errors,
-      submitCount: this.props.submitCount,
-      isValidating: this.props.isValidating,
-    },
-    null,
-    2,
-  )}
-</pre>
+} catch (error) {
+  window.alert(JSON.stringify({
+    message: error?.message ?? String(error),
+    status: error?.response?.status,
+    response: error?.response?.data,
+    stack: error?.stack,
+  }, null, 2));
+
+  yield put(fetchInitiativeTasksError(error));
+}
