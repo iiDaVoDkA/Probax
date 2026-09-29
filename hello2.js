@@ -1,77 +1,39 @@
-git fetch origin
-git status -sb
-git log --oneline @{u}..HEAD
-git diff --stat origin/develop...HEAD
+Yes—the last three screenshots show the correct files. We now have the existing functions:
 
+fetchUsersByTeam(teamId)
+selectUsers(state)
+getUsersByTeamId(users, teamId)
 
+First, connect them in TaskEdition.wrap.js.
 
+1. Add these imports:
 
-const {
-  committeeIdentifierToCreate,
-  ...initiativePipeline
-} = action.values;
+import { selectUsers } from '@app/redux/entities/users/selectors';
+import { fetchUsersByTeam } from '@app/redux/entities/users/actions';
 
-const initiativeId = initiativePipeline.id;
+2. Add users inside the existing mapStateToProps:
 
-if (committeeIdentifierToCreate) {
-  yield call(
-    authenticatedCall,
-    postCommitteeIdentifier,
-    initiativeId,
-    committeeIdentifierToCreate,
-  );
-}
+const mapStateToProps = (state: StateType, props: OwnPropsType): MapStateToPropsType => ({
+  assessmentCategories: selectAssessmentCategoryInitiative(state),
+  user: selectUserState(state),
+  users: selectUsers(state),
+});
 
-const handleSave = event => {
-  event.preventDefault();
-  event.stopPropagation();
+3. Add this entry inside the existing mapDispatchToProps, alongside createTasks:
 
-  const committeeId = original.__committeeId;
-  const previousValue = value == null ? '' : String(value);
+fetchTeamUsers: (teamId: number) =>
+  dispatch(fetchUsersByTeam(teamId)),
 
-  if (editedValue === previousValue) {
-    setIsEditing(false);
-    return;
-  }
+4. In TaskEdition.js, update the props types:
 
-  updateInitiative(original.id, {
-    id: original.id,
+Add to MapStateToPropsType:
 
-    committeeIdentifiers: {
-      ...original.committeeIdentifiers,
-      [committeeId]: editedValue,
-    },
+users: UsersStateType,
 
-    committeeIdentifierToCreate:
-      previousValue === ''
-        ? {
-            commitee_id: Number(committeeId),
-            commitee_initiative_identifier: editedValue,
-          }
-        : undefined,
+Add alongside the existing dispatch-function props, such as createTasks:
 
-    updatedFromGlobalScreen: true,
-  });
+fetchTeamUsers: (teamId: number) => void,
 
-  setIsEditing(false);
-};
+This connects the users data and the action that loads a selected team.
 
-
-<input
-  type="text"
-  value={editedValue}
-  size={1}
-  style={{
-    width: 80,
-    minWidth: 0,
-    height: 24,
-    padding: '2px 4px',
-    boxSizing: 'border-box',
-    fontFamily: 'inherit',
-    fontSize: 12,
-    fontWeight: 400,
-    lineHeight: '16px',
-  }}
-  onClick={event => event.stopPropagation()}
-  onChange={event => setEditedValue(event.target.value)}
-/>
+Next, send the current componentDidMount and componentDidUpdate from TaskEdition.js. We need to place that loading call correctly and update the dropdown when users arrive, while preserving the selected assessor and avoiding the repeated setFieldValue loop we fixed earlier.
