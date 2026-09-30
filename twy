@@ -1,13 +1,14 @@
-[
-    {
-        "id": member["id"],
-        "email": member.get("email"),
-        "is_active": member.get("is_active"),
+if len(team_emails) > 1:
+    preferred_emails = {
+        email
+        for email in team_emails
+        if email.split("@", 1)[0].lower().endswith(".team")
     }
-    for member in users
-    if member.get("is_team") is True
-    and any(
-        team["id"] == 209
-        for team in (member.get("teams") or [])
+
+    team_emails = preferred_emails or {sorted(team_emails)[0]}
+
+for team_email in sorted(team_emails):
+    send_email_task_assessor_assigned(
+        payload["task_name"],
+        team_email,
     )
-]
