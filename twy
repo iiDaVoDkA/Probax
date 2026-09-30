@@ -1,3 +1,29 @@
+Perfect — so we now know exactly where you are:
 
-git fetch origin
-git merge-base --is-ancestor 47ddc1568 origin/develop && echo "MERGED" || echo "NOT MERGED"
+47ddc1568 is pushed to your remote feature branch, but it is NOT merged into develop.
+
+Before creating/merging the PR, I want to make sure no unrelated commits will enter the PR, especially because earlier you saw more changes than your 6 files.
+
+Run these two commands:
+
+git log --oneline origin/develop..HEAD
+
+then:
+
+git diff --name-status origin/develop...HEAD
+
+What we want to see
+
+Ideally, the first command should show only:
+
+47ddc1568 allow to assign a task to a team
+
+And the second should show only the 6 files belonging to your ticket.
+
+Your local:
+
+M src/components/ErrorBoundary/ErrorBoundary.js
+
+does not affect the remote PR because it hasn’t been committed.
+
+Send me the output of those two commands. If there are extra commits/files, don’t merge anything yet — we’ll clean the branch without losing your work.
