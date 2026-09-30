@@ -1,2 +1,3 @@
-git status --short --branch
-git show --stat --oneline HEAD
+
+git fetch origin
+git merge-base --is-ancestor 47ddc1568 origin/develop && echo "MERGED" || echo "NOT MERGED"
