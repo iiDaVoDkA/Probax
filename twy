@@ -1,52 +1,39 @@
-Yes — this confirms the problem.
+Perfect — the cleanup worked. ✅
 
-Your branch contains your commit:
+The cherry-pick completed without conflicts and created a new clean commit:
 
-47ddc1568 allow to assign a task to a team
+1be304295 allow to assign a task to a team
 
-but underneath it there are many unrelated commits from the previous Committee Agenda / initiative-manager work. That’s why:
+And importantly:
 
-git diff origin/develop...HEAD
+6 files changed, 131 insertions(+), 45 deletions(-)
 
-shows far more files than the 6 files from your ticket.
+So the commit hash changed from 47ddc1568 → 1be304295, which is completely normal after cherry-picking.
 
-So do not merge this PR yet. We should clean the branch and keep only your commit.
+Before we overwrite the remote branch, verify it one last time. Run:
 
-Because you also have a local uncommitted change in ErrorBoundary.js, we’ll protect everything first. Run these commands one at a time:
+git log --oneline origin/develop..HEAD
 
-git branch backup/feat271432-before-cleanup
+It should show only:
 
-This creates a safety backup of the branch exactly as it is now.
+1be304295 allow to assign a task to a team
 
 Then:
 
-git stash push -m "temp before cleaning feat271432"
+git diff --name-status origin/develop...HEAD
 
-Then update develop:
+We should see only your 6 ticket files.
 
-git fetch origin
+And finally:
 
-Now remove the unwanted history from your current branch:
+git status --short
 
-git reset --hard origin/develop
+Ideally this last command prints nothing, because we stashed your ErrorBoundary.js modification.
 
-Don’t worry: your old branch is preserved by the backup/... branch.
+If those are correct, the next step will be:
 
-Now put only your ticket commit back on top:
+git push --force-with-lease origin feat271432/allow-to-assign-a-task-to-a-team
 
-git cherry-pick 47ddc1568
+Use --force-with-lease, not plain --force. It will replace the old messy remote history with this clean branch while protecting against overwriting someone else’s unexpected remote changes.
 
-Stop here after cherry-pick
-
-Send me what the terminal prints.
-
-If it says something like:
-
-[feat271432/... abc123] allow to assign a task to a team
-6 files changed...
-
-then we’re good.
-
-If it says CONFLICT, don’t run anything else — send me the screen and we’ll resolve it together.
-
-After that we’ll verify that the branch contains only your changes before doing the force push.
+Send me the output of the three verification commands before pushing.
