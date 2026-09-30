@@ -1,14 +1,460 @@
-if len(team_emails) > 1:
-    preferred_emails = {
-        email
-        for email in team_emails
-        if email.split("@", 1)[0].lower().endswith(".team")
+from copy import deepcopy
+from types import SimpleNamespace
+import unittest
+from unittest.mock import MagicMock, call, patch
+
+from config import APPLICATION_ROOT
+from constants.roles import InitiativeRoleEnum
+from server import server
+from resources.task import task as task_api
+
+
+BASE_URL = f"{APPLICATION_ROOT}/tasks"
+
+
+def make_fake_me_response():
+    response = MagicMock()
+    response.status_code = 200
+    response.json.return_value = {
+        "id": 9001,
+        "uid": "owner@example.test",
+        "roles": [
+            InitiativeRoleEnum.INITIATIVE_OWNER.value,
+            InitiativeRoleEnum.INITIATIVE_ASSESSOR.value,
+            "ADMIN",
+        ],
+    }
+    return response
+
+
+def make_user(
+    user_id,
+    email,
+    team_id=209,
+    is_team=False,
+    is_initiative_manager=False,
+):
+    return {
+        "id": user_id,
+        "email": email,
+        "firstname": "Test",
+        "lastname": "User",
+        "is_active": True,
+        "is_team": is_team,
+        "is_initiative_manager": is_initiative_manager,
+        "roles": ["USER"],
+        "teams": [{"id": team_id}],
     }
 
-    team_emails = preferred_emails or {sorted(team_emails)[0]}
 
-for team_email in sorted(team_emails):
-    send_email_task_assessor_assigned(
-        payload["task_name"],
-        team_email,
-    )
+@patch(
+    "util.required_plm_authentication._me",
+    return_value=make_fake_me_response(),
+)
+@patch(
+    "clients.oidc.validate_token",
+    return_value={"uid": "mySpecialUid"},
+)
+class TestTaskTeamAssignment(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.client = server.test_client()
+
+    def setUp(self):
+        # Fake relationships returned by the repository.
+        self.relationships = {
+            1: SimpleNamespace(
+                id=1,
+                team_id=209,
+                accountant_id=None,
+            ),
+            2: SimpleNamespace(
+                id=2,
+                team_id=213,
+                accountant_id=None,
+            ),
+        }
+
+        # Mock transaction handling and the endpoint's DB reference.
+        # These tests verify the handler, not database persistence.
+        self.start_patch(task_api, "db")
+
+        transaction = self.start_patch(
+            task_api,
+            "SessionCriticalActionManager",
+        )
+        transaction.return_value.__exit__.return_value = False
+
+        self.mock_users = self.start_patch(
+            task_api,
+            "get_users",
+            return_value=[],
+        )
+        self.mock_assessors = self.start_patch(
+            task_api,
+            "get_users_by_role",
+            return_value=[],
+        )
+        self.mock_user_by_id = self.start_patch(
+            task_api,
+            "get_users_by_user_id",
+            return_value=[],
+        )
+        self.mock_send_email = self.start_patch(
+            task_api,
+            "send_email_task_assessor_assigned",
+        )
+
+        self.mock_relationships = self.start_patch(
+            task_api.InitiativeTeamRelationshipRepository,
+            "get_by_relationship_ids",
+            side_effect=lambda ids: [
+                self.relationships[relationship_id]
+                for relationship_id in ids
+            ],
+        )
+
+        # Return the payloads without creating real database records.
+        self.mock_create = self.start_patch(
+            task_api.InitiativeTaskRepository,
+            "create_tasks",
+            side_effect=lambda payloads: deepcopy(payloads),
+        )
+
+    def start_patch(self, target, attribute, **kwargs):
+        patcher = patch.object(target, attribute, **kwargs)
+        mocked = patcher.start()
+        self.addCleanup(patcher.stop)
+        return mocked
+
+    def make_payload(
+        self,
+        name="Test task",
+        relationship_id=1,
+        main_assessor=None,
+    ):
+        return {
+            "task_name": name,
+            "task_type": "OTHER",
+            "task_status": "ON_GOING",
+            "description": "Unit test task",
+            "relationship_id": relationship_id,
+            "main_assessor": main_assessor,
+            "last_assessor": None,
+            "expected_for": None,
+            "task_rating": "",
+            "commets_task_rating": "",
+            "comments_task_canceled": None,
+            "assessment_cat_id": None,
+            "assessment_sub_cat_id": None,
+            "parent_task_id": None,
+            "template_config_id": None,
+            "task_config_id": None,
+            "created_from_template": False,
+        }
+
+    def post_tasks(self, payloads):
+        response = self.client.post(
+            BASE_URL,
+            json={"payloads": payloads},
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.get_data(as_text=True),
+        )
+        self.mock_create.assert_called_once()
+
+        # Inspect the actual payloads passed by the endpoint
+        # to the creation repository.
+        return self.mock_create.call_args.args[0]
+
+    def test_no_manager_creates_shared_task(
+        self, mock_validate, mock_me
+    ):
+        created = self.post_tasks([self.make_payload()])
+
+        self.assertTrue(created[0]["is_team_assigned"])
+        self.assertIsNone(created[0]["main_assessor"])
+        self.mock_send_email.assert_not_called()
+
+    def test_shared_task_notifies_team_mailbox(
+        self, mock_validate, mock_me
+    ):
+        self.mock_users.return_value = [
+            make_user(
+                1801,
+                "ere.product.development.team@example.test",
+                is_team=True,
+            ),
+        ]
+
+        created = self.post_tasks([self.make_payload()])
+
+        self.assertTrue(created[0]["is_team_assigned"])
+        self.mock_send_email.assert_called_once_with(
+            "Test task",
+            "ere.product.development.team@example.test",
+        )
+
+    def test_two_emails_prefer_team_suffix(
+        self, mock_validate, mock_me
+    ):
+        self.mock_users.return_value = [
+            make_user(
+                1799,
+                "alex@example.test",
+                is_team=True,
+            ),
+            make_user(
+                1801,
+                "ere.product.development.team@example.test",
+                is_team=True,
+            ),
+        ]
+
+        self.post_tasks([self.make_payload()])
+
+        self.mock_send_email.assert_called_once_with(
+            "Test task",
+            "ere.product.development.team@example.test",
+        )
+
+    def test_no_team_suffix_uses_fallback(
+        self, mock_validate, mock_me
+    ):
+        self.mock_users.return_value = [
+            make_user(10, "zoe@example.test", is_team=True),
+            make_user(11, "alex@example.test", is_team=True),
+        ]
+
+        self.post_tasks([self.make_payload()])
+
+        # The agreed fallback selects alphabetically.
+        self.mock_send_email.assert_called_once_with(
+            "Test task",
+            "alex@example.test",
+        )
+
+    def test_single_email_without_suffix_is_kept(
+        self, mock_validate, mock_me
+    ):
+        self.mock_users.return_value = [
+            make_user(
+                20,
+                "AM.CollateralManagement@example.test",
+                team_id=213,
+                is_team=True,
+            ),
+        ]
+
+        self.post_tasks([
+            self.make_payload(relationship_id=2),
+        ])
+
+        self.mock_send_email.assert_called_once_with(
+            "Test task",
+            "AM.CollateralManagement@example.test",
+        )
+
+    def test_duplicate_email_is_sent_once(
+        self, mock_validate, mock_me
+    ):
+        self.mock_users.return_value = [
+            make_user(10, "shared.team@example.test", is_team=True),
+            make_user(11, "shared.team@example.test", is_team=True),
+        ]
+
+        self.post_tasks([self.make_payload()])
+
+        self.mock_send_email.assert_called_once_with(
+            "Test task",
+            "shared.team@example.test",
+        )
+
+    def test_another_teams_mailbox_is_excluded(
+        self, mock_validate, mock_me
+    ):
+        self.mock_users.return_value = [
+            make_user(
+                20,
+                "other.team@example.test",
+                team_id=213,
+                is_team=True,
+            ),
+        ]
+
+        self.post_tasks([self.make_payload(relationship_id=1)])
+
+        self.mock_send_email.assert_not_called()
+
+    def test_ordinary_member_is_not_a_team_mailbox(
+        self, mock_validate, mock_me
+    ):
+        self.mock_users.return_value = [
+            make_user(
+                42,
+                "person@example.test",
+                is_team=False,
+            ),
+        ]
+
+        self.post_tasks([self.make_payload()])
+
+        self.mock_send_email.assert_not_called()
+
+    def test_eligible_manager_prevents_shared_assignment(
+        self, mock_validate, mock_me
+    ):
+        self.mock_users.return_value = [
+            make_user(
+                42,
+                "manager@example.test",
+                is_initiative_manager=True,
+            ),
+        ]
+        self.mock_assessors.return_value = [
+            {"user_id": 42},
+        ]
+
+        created = self.post_tasks([self.make_payload()])
+
+        self.assertFalse(created[0]["is_team_assigned"])
+
+    def test_manager_without_assessor_role_does_not_block_shared_task(
+        self, mock_validate, mock_me
+    ):
+        self.mock_users.return_value = [
+            make_user(
+                42,
+                "manager@example.test",
+                is_initiative_manager=True,
+            ),
+        ]
+        self.mock_assessors.return_value = []
+
+        created = self.post_tasks([self.make_payload()])
+
+        self.assertTrue(created[0]["is_team_assigned"])
+
+    def test_manager_of_another_team_does_not_block_shared_task(
+        self, mock_validate, mock_me
+    ):
+        self.mock_users.return_value = [
+            make_user(
+                42,
+                "manager@example.test",
+                team_id=213,
+                is_initiative_manager=True,
+            ),
+        ]
+        self.mock_assessors.return_value = [
+            {"user_id": 42},
+        ]
+
+        created = self.post_tasks([
+            self.make_payload(relationship_id=1),
+        ])
+
+        self.assertTrue(created[0]["is_team_assigned"])
+
+    def test_old_accountant_flow_keeps_individual_notification(
+        self, mock_validate, mock_me
+    ):
+        self.relationships[1].accountant_id = 42
+        self.mock_user_by_id.return_value = [
+            {
+                "id": 42,
+                "email": "manager@example.test",
+            },
+        ]
+        self.mock_users.return_value = [
+            make_user(
+                1801,
+                "shared.team@example.test",
+                is_team=True,
+            ),
+        ]
+
+        created = self.post_tasks([self.make_payload()])
+
+        self.assertFalse(created[0]["is_team_assigned"])
+        self.mock_user_by_id.assert_called_once_with([42])
+
+        # Exactly one individual email; no extra team email.
+        self.mock_send_email.assert_called_once_with(
+            "Test task",
+            "manager@example.test",
+        )
+
+    def test_explicit_main_assessor_keeps_individual_assignment(
+        self, mock_validate, mock_me
+    ):
+        self.mock_users.return_value = [
+            make_user(
+                1801,
+                "shared.team@example.test",
+                is_team=True,
+            ),
+        ]
+
+        created = self.post_tasks([
+            self.make_payload(main_assessor=1783),
+        ])
+
+        self.assertFalse(created[0]["is_team_assigned"])
+        self.assertEqual(created[0]["main_assessor"], 1783)
+        self.assertIsNone(self.relationships[1].accountant_id)
+
+        # No shared-team notification for this personal task.
+        self.mock_send_email.assert_not_called()
+
+    def test_multiple_tasks_notify_their_respective_teams(
+        self, mock_validate, mock_me
+    ):
+        self.mock_users.return_value = [
+            make_user(
+                1801,
+                "ere.team@example.test",
+                team_id=209,
+                is_team=True,
+            ),
+            make_user(
+                1802,
+                "collateral@example.test",
+                team_id=213,
+                is_team=True,
+            ),
+        ]
+
+        created = self.post_tasks([
+            self.make_payload(
+                name="Risk task",
+                relationship_id=1,
+            ),
+            self.make_payload(
+                name="Collateral task",
+                relationship_id=2,
+            ),
+        ])
+
+        self.assertEqual(len(created), 2)
+        self.assertTrue(created[0]["is_team_assigned"])
+        self.assertTrue(created[1]["is_team_assigned"])
+
+        self.assertEqual(
+            self.mock_send_email.call_args_list,
+            [
+                call("Risk task", "ere.team@example.test"),
+                call("Collateral task", "collateral@example.test"),
+            ],
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+api/task/test_task_team_assignment.py
