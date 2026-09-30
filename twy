@@ -1,3 +1,2 @@
-git fetch origin
-git log --oneline origin/develop..HEAD
-git diff --name-status origin/develop...HEAD
+git status --short --branch
+git show --stat --oneline HEAD
