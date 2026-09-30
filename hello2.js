@@ -1,33 +1,41 @@
-Exactly. Your screenshots confirm it: TemplateResource currently only has GET, and the frontend only has getTemplate(...). There is no existing PATCH for a Template.
 
-So for this ticket, we actually do need to add a small PATCH flow. We should stop trying to reuse patchTemplateConfig, because that is what caused the strange “new template” behavior.
+I would not put the new PATCH logic in initiativePipeline just because there is already a getTemplate() there.
 
-The clean solution is:
+For this ticket, the cleanest fit with the architecture you showed is:
 
-TemplateInitiative
-      ↓
-GET /templates-config        ← keep this, page needs the rows
-      ↓
-user edits heading
-      ↓
-PATCH /templates/{template_id}   ← NEW
-{ name: "New name" }
-      ↓
-same template ID, new name
-      ↓
-refresh /templates-config
+Backend
+resources/template/template.py
+        ↑
+        │ PATCH /templates/{id}
+        │
+Frontend
+redux/entities/templateInitiative/
+    api.js
+    constants.js
+    actions.js
+    sagas.js
+        ↑
+TemplateInitiative.wrap.js
+        ↑
+TemplateInitiative.js
 
-1. Backend — resources/template/template.py
+That keeps all the functionality used by the TemplateInitiative administration page together.
 
-Your file already has:
+The getTemplate() you found under initiativePipeline / initiativeTasks is there because those other features need to read a template. It doesn’t mean that module should own template administration.
+
+So I would do this.
+
+1. Backend: resources/template/template.py
+
+You already have:
 
 class TemplateResource(Resource):
 
-and:
+and the route supports /templates/{id}, because GET /templates/{id} already exists.
 
-def get(user, id=None):
+Add a PATCH underneath get.
 
-Add this under the GET:
+You can actually make the ADMIN restriction cleaner than what we previously did, because this file already uses authorized_plm_roles:
 
 @staticmethod
 @authorized_plm_roles(
@@ -55,54 +63,26 @@ def patch(user, id=None):
         db.session.rollback()
         return {"message": str(exc)}, 400
 
-This is much cleaner than the ADMIN code we had put inside TemplateConfigResource.
+So you don’t need to manually calculate:
 
-And importantly:
+is_admin = ...
 
-template id = 3
-name = Testing
+The decorator already handles authorization.
 
-becomes:
-
-template id = 3
-name = New Testing
-
-No id 4 gets created.
-
-Remove the special:
-
-if "template_name" in payload:
-    ...
-
-code that we added to TemplateConfigResource.patch for this ticket. That resource should go back to its previous behavior.
+And remove the special template_name ADMIN code we added to TemplateConfigResource.patch.
 
 ⸻
 
-2. Frontend API — add PATCH beside the template API
+2. Put the frontend API in templateInitiative/api.js
 
-You showed an existing:
-
-export function getTemplate(templateId, token: string) {
-  const requestURL =
-    `${config.INITIATIVE_API_URL}/templates/${templateId}`;
-  return request(requestURL, {
-    method: 'GET',
-    headers: {
-      authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-  });
-}
-
-Add underneath:
+Even though it calls /templates, I would place it beside the API calls used by this page:
 
 export function patchTemplateById(
   templateId: string,
   payload: any,
   token: string,
 ) {
-  const requestURL =
-    `${config.INITIATIVE_API_URL}/templates/${templateId}`;
+  const requestURL = `${config.INITIATIVE_API_URL}/templates/${templateId}`;
   return request(requestURL, {
     method: 'PATCH',
     headers: {
@@ -113,97 +93,263 @@ export function patchTemplateById(
   });
 }
 
-That’s your new API call.
+Don’t modify the getTemplate() sitting in initiativeTasks or initiativePipeline.
 
 ⸻
 
-3. Do NOT use this anymore for renaming
+3. templateInitiative/constants.js
 
-Remove this approach:
+Add:
 
-rows.forEach(row => {
-  patchTemplateConfig(row.id, {
-    template_name: newName,
-  });
-});
+export const PATCH_TEMPLATE_REQUEST =
+  'app/templateInitiative/PATCH_TEMPLATE_REQUEST';
+export const PATCH_TEMPLATE_SUCCESS =
+  'app/templateInitiative/PATCH_TEMPLATE_SUCCESS';
+export const PATCH_TEMPLATE_FAILURE =
+  'app/templateInitiative/PATCH_TEMPLATE_FAILURE';
 
-That was PATCHing:
-
-/templates-config/{config_id}
-
-which is the wrong entity.
-
-Instead we’ll eventually call:
-
-patchTemplate(rows[0].template_id, {
-  name: newName,
-});
-
-Only one PATCH.
+Use whatever naming prefix that file already uses; just mirror its existing constants.
 
 ⸻
 
-4. Why rows[0].template_id is correct
+4. templateInitiative/actions.js
 
-Your Network screenshot shows:
+At the top, import those three constants.
 
-{
-  id: 1,             // config ID
-  template_id: 3,    // template ID
-  template_name: "Testingi",
-  ...
+Then add:
+
+export const patchTemplate = (
+  templateId: string,
+  values: any,
+) => ({
+  type: PATCH_TEMPLATE_REQUEST,
+  payload: {
+    templateId,
+    values,
+  },
+});
+export const patchTemplateSuccess = template => ({
+  type: PATCH_TEMPLATE_SUCCESS,
+  payload: {
+    template,
+  },
+});
+export const patchTemplateFailure = error => ({
+  type: PATCH_TEMPLATE_FAILURE,
+  error,
+});
+
+And if this file has the big:
+
+export default {
+   ...
 }
+
+at the bottom, add:
+
+patchTemplate,
+patchTemplateSuccess,
+patchTemplateFailure,
+
+there too.
+
+⸻
+
+5. templateInitiative/sagas.js
+
+Add the API import:
+
+import {
+  ...
+  patchTemplateById,
+} from './api';
+
+Add the actions:
+
+import {
+  ...
+  patchTemplateSuccess,
+  patchTemplateFailure,
+  getTemplateConfig,
+} from './actions';
+
+Add the constant:
+
+import {
+  ...
+  PATCH_TEMPLATE_REQUEST,
+} from './constants';
+
+Then add:
+
+export function* patchTemplateSaga(action: any): Saga<> {
+  try {
+    const { templateId, values } = action.payload;
+    const response = yield authenticatedCall(
+      patchTemplateById,
+      templateId,
+      values,
+    );
+    yield put(patchTemplateSuccess(response.data));
+    // Important because this screen displays templates-config
+    yield put(getTemplateConfig());
+  } catch (err) {
+    yield put(patchTemplateFailure(err));
+  }
+}
+
+And in the bottom watcher:
+
+export default function* sagas(): Saga<> {
+
+add:
+
+yield takeLatest(
+  PATCH_TEMPLATE_REQUEST,
+  patchTemplateSaga,
+);
+
+The reason for:
+
+yield put(getTemplateConfig());
+
+is exactly what you were confused about earlier.
+
+The write goes to:
+
+/templates/3
+
+but this page’s display data comes from:
+
+/templates-config
+
+So after renaming the actual Template, we reload template-config and the screen receives the new template_name.
+
+⸻
+
+6. TemplateInitiative.wrap.js
+
+You currently import:
+
+getTemplateConfig,
+patchTemplateConfig,
+deleteTemplateConfig,
+createTemplateConfig,
+
+Add:
+
+patchTemplate,
 
 So:
 
-row.id
+import {
+  getTemplateConfig,
+  patchTemplateConfig,
+  deleteTemplateConfig,
+  createTemplateConfig,
+  patchTemplate,
+} from '@app/redux/entities/templateInitiative/actions';
 
-means:
+Then add to mapDispatchToProps:
 
-config row
+patchTemplate: (id, values) =>
+  dispatch(patchTemplate(id, values)),
 
-whereas:
+You should then have something like:
 
-row.template_id
-
-means:
-
-actual template
-
-For this ticket we need the second one.
+const mapDispatchToProps = dispatch => ({
+  fetchAllTeams: () => dispatch(fetchAllTeams()),
+  fetchUsers: () => dispatch(fetchUsers()),
+  fetchTeams: () => dispatch(fetchTeams()),
+  getTemplateConfig: () =>
+    dispatch(getTemplateConfig()),
+  getAssessmentCategory: () =>
+    dispatch(getAssessmentCategory()),
+  createTemplateConfig: payload =>
+    dispatch(createTemplateConfig(payload)),
+  patchTemplateConfig: (id, values) =>
+    dispatch(patchTemplateConfig(id, values)),
+  patchTemplate: (id, values) =>
+    dispatch(patchTemplate(id, values)),
+  deleteTemplateConfig: id =>
+    dispatch(deleteTemplateConfig(id)),
+  fetchProducts: () => dispatch(fetchProducts()),
+}));
 
 ⸻
 
-5. We still need Redux/Saga wiring
+7. Finally TemplateInitiative.js
 
-Since your application uses Redux Saga, we shouldn’t call patchTemplateById() directly from the component.
+Get:
 
-We need the normal FLOWR path:
+patchTemplate,
 
-TemplateInitiative.js
-       ↓
-patchTemplate(...)
-       ↓
-action
-       ↓
-saga
-       ↓
-patchTemplateById(...)
-       ↓
-PATCH /templates/{id}
-       ↓
-refresh template-config
+from props.
 
-You already showed me templateInitiative/sagas.js, so we’ll follow its existing pattern rather than invent something different.
+Then your save becomes very small:
 
-Don’t add more code yet.
+const saveTemplateEdit = useCallback(
+  (oldName, rows) => {
+    const newName = templateNameDraft.trim();
+    if (!newName || newName === oldName) {
+      cancelTemplateEdit();
+      return;
+    }
+    patchTemplate(rows[0].template_id, {
+      name: newName,
+    });
+    setEditingTemplateName(null);
+    setTemplateNameDraft('');
+  },
+  [
+    templateNameDraft,
+    patchTemplate,
+    cancelTemplateEdit,
+  ],
+);
 
-Show me these two files:
+And your calls remain:
 
-src/redux/entities/templateInitiative/actions.js
+saveTemplateEdit(templateName, rows);
 
-and:
+The architecture then makes sense
 
-TemplateInitiative.wrap.js
+TemplateInitiative page
+        │
+        │ Displays
+        ▼
+GET /templates-config
+        │
+        │ Gives:
+        │ id = config ID
+        │ template_id = template ID
+        │ template_name
+        │
+        ▼
+User clicks ✏️
+        │
+        ▼
+patchTemplate(template_id, { name })
+        │
+        ▼
+Redux action
+        │
+        ▼
+templateInitiative saga
+        │
+        ▼
+PATCH /templates/{template_id}
+        │
+        ▼
+Template.name changes
+SAME template_id
+        │
+        ▼
+GET /templates-config again
+        │
+        ▼
+UI receives updated template_name
 
-Then I can give you the exact additions for each file, line by line, and we’ll have the clean minimal implementation.
+So yes: put the new action/saga/API under templateInitiative, not under initiativePipeline.
+
+The rule I’d use here is: where is the operation initiated and managed? In this case it is an admin operation on the TemplateInitiative page, so that Redux module should own the flow. The backend resource, however, correctly belongs to TemplateResource because the actual entity being modified is the Template.
