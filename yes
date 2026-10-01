@@ -1,6 +1,1 @@
-{
-    "id": user.get("id"),
-    "roles": user.get("roles"),
-    "has_teams": "teams" in user,
-    "teams": user.get("teams"),
-}
+team_ids = [team["id"] for team in user["teams"]]
