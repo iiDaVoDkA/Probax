@@ -1,46 +1,62 @@
-Oui — là je vois le problème : ton commit actuel est bon et ne contient qu’un fichier, mais ton historique contient encore l’ancien commit :
+def test_shared_member_assigns_only_an_eligible_team_assessor(self):
+    cases = [
+        # name, target team, assessor role, team account, exists, allowed
+        ("eligible_teammate", ALPHA, True, False, True, True),
+        ("different_team", BETA, True, False, True, False),
+        ("missing_assessor_role", ALPHA, False, False, True, False),
+        ("team_account", ALPHA, True, True, True, False),
+        ("unknown_user", ALPHA, True, False, False, False),
+    ]
 
-640f53887  fix initiative assessor view in task-tabs   ✅ À GARDER
-130bcf558  allow admin to edit template name           ❌ À ENLEVER
+    for name, team_id, has_role, is_team, exists, allowed in cases:
+        with self.subTest(case=name):
+            self.rows = {1: make_task(main=None, shared=True)}
+            self.link.accountant_id = None
+            self.link.team_id = ALPHA
+            self.db.session.flush.reset_mock()
+            self.permission_error.reset_mock()
 
-Ne recommence pas le commit. Fais ceci, c’est le plus sûr :
+            before = self.snapshot()
+            original_relationship_id = self.rows[1].relationship_id
 
-git branch backup/bug272026-cleanup
+            users = [
+                {
+                    "id": A,
+                    "is_team": False,
+                    "teams": [{"id": ALPHA}],
+                }
+            ]
 
-S’il te reste des modifications locales non commitées :
+            if exists:
+                users.append({
+                    "id": B,
+                    "is_team": is_team,
+                    "teams": [{"id": team_id}],
+                })
 
-git stash push -u -m "temp before cleanup bug272026"
+            assessor_users = [{"user_id": B}] if has_role else []
 
-Puis :
+            with (
+                patch(
+                    "resources.task.task.get_users",
+                    return_value=users,
+                ),
+                patch(
+                    "resources.task.task.get_users_by_role",
+                    return_value=assessor_users,
+                ),
+            ):
+                response = self.send_patch({"main_assessor": B})
 
-git fetch origin
-git reset --hard origin/develop
-git cherry-pick backup/bug272026-cleanup
-
-Le cherry-pick reprend uniquement le dernier commit de ta branche backup, donc ton commit fix initiative assessor view in task-tabs.
-
-Ensuite vérifie :
-
-git log --oneline origin/develop..HEAD
-
-Tu dois voir une seule ligne :
-
-<new-hash> fix initiative assessor view in task-tabs
-
-Puis :
-
-git diff --name-status origin/develop...HEAD
-
-Tu dois voir uniquement :
-
-M  .../InitiativePipelineTasksTab.js
-
-Ensuite pousse :
-
-git push --force-with-lease -u origin bug272026/Assessor-not-able-to-view-initiatives
-
-Et si tu avais fait le stash au début, seulement après :
-
-git stash pop
-
-Donc oui : ton commit lui-même est propre (1 fichier). Ce qu’on nettoie maintenant, c’est uniquement son ancien parent allow admin to edit template name.
+            if allowed:
+                self.assert_allowed(response)
+                self.assertEqual(self.rows[1].main_assessor, B)
+                self.assertIs(self.rows[1].is_team_assigned, False)
+                self.assertEqual(
+                    self.rows[1].relationship_id,
+                    original_relationship_id,
+                )
+            else:
+                self.assert_denied(response)
+                self.assertEqual(self.snapshot(), before)
+                self.db.session.flush.assert_not_called()
