@@ -1,53 +1,69 @@
-The screenshots show two null-safety bugs matching the crash: mainAssessor.value and the unguarded risks.value reads.
+The Validate ✔ and Cancel × buttons have separate permission checks in columns.js. Add the same team-assessor permission there.
 
-1. Replace the read-only MAIN ASSESSOR <select>, around lines 1055–1064, with:
+1. Pass the original tasks into columns.js.
 
-<select
-  value={ratingEditValues.mainAssessor?.value ?? ''}
-  style={fullWidthInput}
-  disabled={true}
->
-  <option value="" />
-  {ratingEditValues.mainAssessor && (
-    <option value={ratingEditValues.mainAssessor.value}>
-      {ratingEditValues.mainAssessor.label}
-    </option>
-  )}
-</select>
+In InitiativePipelineTasksTab.js, append this.props.assessorTasks as the last argument of your existing getTasksTableColumns(...) call.
 
-A task assigned only to a team can have no individual assessor. This displays an empty selection safely. Keep the surrounding permission condition.
+In columns.js, add the matching last parameter, immediately after openNotAnsweredTaskModal:
 
-2. Fix the four unguarded rating accesses in the Done and Validate modals, around lines 1253, 1258, 1295 and 1300.
+openNotAnsweredTaskModal: (task: Object) => void,
+assessorTasks: ?(TaskType[]) = [],
+) => {
 
-Replace:
+2. Inside getTasksTableColumns, immediately after isUserAssessorOfInitiative, add:
 
-ratingEditValues.risks.value
+const canEditAsTeamAssessor = original => {
+  if (original?.id == null) return false;
+  const task = (assessorTasks || []).find(
+    item => String(item.id) === String(original.id),
+  );
+  return (
+    task?.isTeamAssigned === true &&
+    task.mainAssessor == null &&
+    original.mainAssessorId == null &&
+    original.accountantId == null &&
+    original.teamId != null &&
+    (user.roles || []).includes(USER_ROLE_INITIATIVE_ASSESSOR) &&
+    (user.teamIds || []).some(
+      teamId => String(teamId) === String(original.teamId),
+    )
+  );
+};
+
+This reads the flag from the original task list—the displayed row previously had isTeamAssigned: undefined.
+
+3. Update the two buttons that call:
+
+openDoneTaskModal(original)
+openCancelTaskModal(original)
+
+In each button’s disabled expression, replace this permission part:
+
+!(
+  isUserAllowedToUpdateTask ||
+  isUserAssessorOfInitiative(original.accountantId, original.mainAssessorId)
+)
 
 with:
 
-ratingEditValues.risks?.value
+!(
+  isUserAllowedToUpdateTask ||
+  isUserAssessorOfInitiative(original.accountantId, original.mainAssessorId) ||
+  canEditAsTeamAssessor(original)
+)
 
-For example, each modal’s height becomes:
+Keep the rest of each expression, including the DONE, CANCELED, ON_HOLD, and final-initiative restrictions.
 
-height={
-  ratingEditValues.comment && ratingEditValues.risks?.value
-    ? Grid(40)
-    : Grid(33)
-}
+4. For “VALIDATE TASK” inside the rating modal, include your existing canEditAsTeamAssessor boolean in its permission group too:
 
-And its confirmation condition becomes:
+(
+  isUserAllowedToUpdateTask ||
+  isUserAssessorOfInitiative(accountantId, mainAssessorId) ||
+  canEditAsTeamAssessor
+)
 
-(ratingEditValues.comment && ratingEditValues.risks?.value) ||
-(ratingEditValues.comment && ratingEditValues.type === 'OTHER')
+Keep its existing status and required-field checks.
 
-These expressions are evaluated during the parent’s render even when the modal is closed, which explains how they can crash the whole tasks tab.
+Then validate one eligible task and cancel another; refresh to confirm both changes persisted. Check that another team’s assessor still cannot perform either action.
 
-This preserves the visible validation rule: assessment tasks require a comment and rating; OTHER tasks require a comment. The rating dropdown around line 1131 already checks for null.
-
-After applying these changes, reload and check:
-
-* A task without a main assessor opens successfully.
-* An individually assigned task still displays its assessor.
-* An assessment with a comment but no rating cannot be completed.
-
-I can identify these unsafe accesses from the screenshots; confirming which one triggered your particular render requires running the updated page.
+This fixes the UI permissions shown. The screenshots don’t show the submission handlers: if saving returns 403, we need to check the endpoint called by that action.
