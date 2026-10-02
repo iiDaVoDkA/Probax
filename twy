@@ -1,39 +1,46 @@
-Perfect — the cleanup worked. ✅
+Oui — là je vois le problème : ton commit actuel est bon et ne contient qu’un fichier, mais ton historique contient encore l’ancien commit :
 
-The cherry-pick completed without conflicts and created a new clean commit:
+640f53887  fix initiative assessor view in task-tabs   ✅ À GARDER
+130bcf558  allow admin to edit template name           ❌ À ENLEVER
 
-1be304295 allow to assign a task to a team
+Ne recommence pas le commit. Fais ceci, c’est le plus sûr :
 
-And importantly:
+git branch backup/bug272026-cleanup
 
-6 files changed, 131 insertions(+), 45 deletions(-)
+S’il te reste des modifications locales non commitées :
 
-So the commit hash changed from 47ddc1568 → 1be304295, which is completely normal after cherry-picking.
+git stash push -u -m "temp before cleanup bug272026"
 
-Before we overwrite the remote branch, verify it one last time. Run:
+Puis :
+
+git fetch origin
+git reset --hard origin/develop
+git cherry-pick backup/bug272026-cleanup
+
+Le cherry-pick reprend uniquement le dernier commit de ta branche backup, donc ton commit fix initiative assessor view in task-tabs.
+
+Ensuite vérifie :
 
 git log --oneline origin/develop..HEAD
 
-It should show only:
+Tu dois voir une seule ligne :
 
-1be304295 allow to assign a task to a team
+<new-hash> fix initiative assessor view in task-tabs
 
-Then:
+Puis :
 
 git diff --name-status origin/develop...HEAD
 
-We should see only your 6 ticket files.
+Tu dois voir uniquement :
 
-And finally:
+M  .../InitiativePipelineTasksTab.js
 
-git status --short
+Ensuite pousse :
 
-Ideally this last command prints nothing, because we stashed your ErrorBoundary.js modification.
+git push --force-with-lease -u origin bug272026/Assessor-not-able-to-view-initiatives
 
-If those are correct, the next step will be:
+Et si tu avais fait le stash au début, seulement après :
 
-git push --force-with-lease origin feat271432/allow-to-assign-a-task-to-a-team
+git stash pop
 
-Use --force-with-lease, not plain --force. It will replace the old messy remote history with this clean branch while protecting against overwriting someone else’s unexpected remote changes.
-
-Send me the output of the three verification commands before pushing.
+Donc oui : ton commit lui-même est propre (1 fichier). Ce qu’on nettoie maintenant, c’est uniquement son ancien parent allow admin to edit template name.
