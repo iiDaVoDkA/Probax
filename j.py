@@ -1,111 +1,53 @@
-Your helper needs two fixes: send initiative_url to match the HTML, and put the task name inside the tasks list.
+Start with a local HTML preview. This lets you check the layout and data without importing clients or sending an email.
 
-1. Replace these two functions in src/util/email_helpers.py
+1. Create preview_assignment_email.py at the project root:
 
-Downloadable version: email_assignment_helpers.py⁠￼.
-
-from clients import mailer
-def send_email_task_assessor_assigned(
-    task_name,
-    recipients,
-    *,
-    initiative_name,
-    initiative_id,
-    initiative_type,
-    initiative_link,
-    tasks=None,
-):
-    if tasks is None:
-        tasks = [
-            {
-                "task_type": None,
-                "task_name": task_name,
-                "expected_for": None,
-            }
-        ]
-    injections = {
-        "initiative_name": initiative_name,
-        "initiative_id": initiative_id,
-        "initiative_type": initiative_type,
-        # Must match {{ initiative_url }} in the HTML:
-        "initiative_url": initiative_link,
-        "tasks": tasks,
-    }
-    return mailer.send_mail_template(
-        recipients,
-        "task_assessor_assigned_v1",
-        injections=injections,
-    )
-def send_email_assessor_changed(
-    initiative_id,
-    recipients,
-    *,
-    initiative_name,
-    initiative_type,
-    initiative_link,
-    tasks,
-):
-    return send_email_task_assessor_assigned(
-        task_name="",
-        recipients=recipients,
-        initiative_name=initiative_name,
-        initiative_id=initiative_id,
-        initiative_type=initiative_type,
-        initiative_link=initiative_link,
-        tasks=tasks,
-    )
-
-The initiative details are now required. Update every call to both functions, otherwise old two-argument calls will raise a TypeError.
-
-2. Call it where your existing notification is sent
-
-For this ticket, replace the existing call in the resource or repository where it already exists. If the repository sends the notification, adding another send in the resource would duplicate it.
-
-For the team-assignment branch, the call would have this structure:
-
-send_email_task_assessor_assigned(
-    task_name=payload["task_name"],
-    recipients=team_email,
-    initiative_name=initiative_name,
-    initiative_id=initiative_id,
-    initiative_type=initiative_type_label,
-    initiative_link=initiative_link,
+from pathlib import Path
+from jinja2 import Environment, StrictUndefined
+# Replace this with your template's actual relative path.
+template_path = Path("src/templates/task_assessor_assigned_v1.html")
+env = Environment(
+    autoescape=True,
+    undefined=StrictUndefined,
+)
+template = env.from_string(
+    template_path.read_text(encoding="utf-8")
+)
+html = template.render(
+    initiative_name="Test initiative — Research & Development",
+    initiative_id=130,
+    initiative_type="New product",
+    initiative_url="https://example.invalid/initiative/130/tasks",
     tasks=[
         {
-            "task_type": task_type_label,
-            "task_name": payload["task_name"],
-            "expected_for": expected_for_display,
-        }
+            "task_type": "Assessment",
+            "task_name": "Review the initiative",
+            "expected_for": "15/10/2026",
+        },
+        {
+            "task_type": "Validation",
+            "task_name": "Validate the assessment",
+            "expected_for": None,
+        },
     ],
 )
+output = Path("assignment_email_preview.html")
+output.write_text(html, encoding="utf-8")
+print(f"Preview created: {output.resolve()}")
 
-The variables for the initiative, type labels, link and date above must come from your actual handler. Their field names aren’t visible in your screenshot, so this is the call structure, not a complete repository patch.
+In VS Code, right-click your template → Copy Relative Path, then use that path in template_path.
 
-For an individual assignment, use the assessor recipient already selected by that branch instead of team_email.
+2. Run in your activated virtual environment:
 
-Pass a readable type label and an already formatted date, for example:
+python preview_assignment_email.py
+open assignment_email_preview.html
 
-{
-    "task_type": "Assessment",
-    "task_name": "Review the initiative",
-    "expected_for": "15/10/2026",
-}
+3. Check:
 
-3. When changing the main assessor
+* FLOWR logo, green header and readable layout.
+* Initiative name, ID and type appear.
+* Exactly two task rows appear.
+* The second date displays —.
+* No raw {{ ... }} appears.
 
-Collect the rows for the tasks actually reassigned to that person, then call:
-
-send_email_assessor_changed(
-    initiative_id=initiative_id,
-    recipients=assessor_email,
-    initiative_name=initiative_name,
-    initiative_type=initiative_type_label,
-    initiative_link=initiative_link,
-    tasks=reassigned_task_rows,
-)
-
-For several tasks on the same initiative going to the same recipient, make this call once after the reassignment loop succeeds, using the existing transaction/send timing.
-
-One separate issue: your terminal shows ModuleNotFoundError: No module named 'clients'. That happens before the email helper runs. The standalone script still needs the API’s working interpreter and import setup; these helper changes won’t resolve that import error.
-
-Send me the existing email call in your task resource/repository, with roughly 20 lines around it. Then I can replace the illustrative variables above with your actual fields.
+The link uses a dummy address for this preview. This checks the HTML rendering only; the Python helper, template registration and actual email delivery still need a separate test once the clients import issue is resolved.
