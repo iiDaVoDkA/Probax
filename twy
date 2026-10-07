@@ -1,6 +1,5 @@
-logging.warning(
-    "MAILER lookup: mail_type=%r locale=%r game_name=%r",
-    payload_send["mail_type"],
-    payload_send["locale"],
-    payload_send["game_name"],
-)
+SELECT COUNT(*)
+FROM own_26967_plmmailer.template
+WHERE template_type = 'task_assessor_assigned_v1'
+  AND locale = 'en_US'
+  AND game_name = '_';
