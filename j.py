@@ -1,11 +1,13 @@
-The import still fails, and the search did not run because rg isn’t installed on your Mac. That doesn’t yet tell us whether shared_config is missing.
+The utils submodule shows a - before its commit hash, meaning it hasn’t been initialized. That explains the missing shared code.
 
-From the flowr-mailer-api terminal, run this instead:
+From flowr-mailer-api, run:
 
-find . -type d \( -name .venv -o -name .git \) -prune -o -name '*shared_config*' -print
+git submodule update --init --recursive
 
-Also run:
+Once it finishes successfully, run:
 
-git submodule status
+export PYTHONPATH="$PWD/src:$PWD/utils/src${PYTHONPATH:+:$PYTHONPATH}"
+python -m flask --app src/manage.py db revision \
+  -m "add task assessor assigned email template"
 
-Send me both outputs—even if blank. This will help distinguish an incorrect Python path from a shared dependency that hasn’t been downloaded during project setup.
+This should create an empty migration file; it won’t insert the template yet. If either command fails, send me the new error.
