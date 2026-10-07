@@ -1,3 +1,3 @@
 SELECT template_type, locale, game_name
-FROM template
+FROM own_26967_plmmailer.template
 WHERE template_type = 'task_assessor_assigned_v1';
