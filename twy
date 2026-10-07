@@ -1,2 +1,6 @@
-SELECT version_num
-FROM own_26967_plmmailer.alembic_version;
+logging.warning(
+    "MAILER lookup: mail_type=%r locale=%r game_name=%r",
+    payload_send["mail_type"],
+    payload_send["locale"],
+    payload_send["game_name"],
+)
