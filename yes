@@ -1,1 +1,4 @@
-Quand une initiative passe en on hold ou canceled, on prévient bien tous les assessors de ses tâches, une seule fois par personne ? Est-ce qu’on inclut les tâches déjà terminées ou annulées ? Et pour une tâche assignée à une équipe sans main assessor, on envoie à la boîte mail de l’équipe ? On applique les mêmes règles à la réactivation ?
+{PROJECT_STATUS[project.status].possibleStatusTransitions.length !== 0 &&
+(project.status === PROJECT_STATUS_LIVE
+  ? IsSuperAdmin(user)
+  : isUserAuthorized(user, project)) ? (
