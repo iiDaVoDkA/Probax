@@ -1,88 +1,193 @@
-Email delivery now works. The remaining issue is the data passed from task.py. The screenshot shows the ID being used as the name, and literal placeholders for the ID and type.
 
-The values should map like this:
+LOWR 271870 — initiative hold, cancel and reactivation emails
 
-Email field	Value
-Clickable title	Actual initiative name
-Initiative ID	team_relationship.initiative_id
-Initiative type	Actual initiative type label
-Link	Base URL + / + initiative ID
-Expected for	Formatted date, or “Not scheduled yet”
+Prepared from the ticket screenshot. This covers the template and email helper; the initiative status endpoint has not been supplied, so the sending trigger is not yet wired into the application.
 
-For the ID and link:
+Required behavior
 
-initiative_id = team_relationship.initiative_id
-initiative_link = f"{base_url.rstrip('/')}/{initiative_id}"
+|Initiative event|Subject                                                   |Main message                                      |
+|----------------|----------------------------------------------------------|--------------------------------------------------|
+|Put on hold     |FLOWR - The initiative you’ve been assigned to is on hold |The initiative you’ve been assigned to is on hold |
+|Canceled        |FLOWR - The initiative you’ve been assigned to is canceled|The initiative you’ve been assigned to is canceled|
+|Reactivated     |FLOWR - Reactivation of the initiative 131                |The initiative 131 has been reactivated           |
 
-For each task’s missing date, pass this into the email data:
+131 is illustrative; use the real initiative ID. Each message also contains the linked initiative name, initiative ID and initiative type. Use the same green styling as the assignment email, with no logo. The ticket does not request a task table.
 
-"expected_for": formatted_date or "Not scheduled yet",
+The event is a change to the initiative, not an individual task’s status. Notify the assessors in charge of its tasks. An unchanged status must not trigger another status email. Use one notification per assessor for the initiative event even if that assessor has several tasks.
 
-Here, formatted_date means the actual date formatted for display, or None when unset. The strange characters in the screenshot look like an incorrectly encoded dash; supplying this text avoids that fallback.
+Step 1 — add the template through a new migration
 
-Send me the base URL, your current email-calling block in task.py, and the initiative model/repository getter. Then I can give you the exact replacement using your real name/type fields, without guessing their names.
+In flowr-mailer-api, create a new Alembic revision using your normal project workflow. Keep its generated revision metadata and dependency. Paste the following imports and function bodies into that new migration; do not replace an already applied migration.
+
+This adds one template row. Subjects and introductory messages are supplied by the helper in Step 2. The HTML is an ordinary triple-quoted string; SQL parameters are bound separately.
+
+import sqlalchemy as sa
+from alembic import op
 
 
+def upgrade():
+    body = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FLOWR - Initiative update</title>
+</head>
+<body style="margin:0; padding:0; background-color:#ffffff;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+         border="0" style="border-collapse:collapse; background-color:#ffffff;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <!--[if mso]>
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0"
+               border="0"><tr><td>
+        <![endif]-->
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+               border="0" style="max-width:600px; border-collapse:collapse;
+               font-family:Arial,Helvetica,sans-serif; color:#333333;">
+          <tr>
+            <td style="border-top:4px solid #00965e; padding:24px 0 20px;">
+              <h1 style="margin:0; font-size:23px; line-height:32px;
+                         font-weight:700; color:#252525;">
+                {{ notification_message | e }}
+              </h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 0 18px; font-size:20px; line-height:28px;
+                       font-weight:700;">
+              <a href="{{ initiative_url | e }}"
+                 style="color:#008653; text-decoration:underline;">
+                {{ initiative_name | e }}
+              </a>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 0 10px; font-size:14px; line-height:22px;">
+              <strong>Initiative ID:</strong> {{ initiative_id | e }}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 0 28px; font-size:14px; line-height:22px;">
+              <strong>Initiative type:</strong> {{ initiative_type | e }}
+            </td>
+          </tr>
+          <tr>
+            <td style="border-top:1px solid #dce5df; padding:16px 0 0;
+                       color:#666666; font-size:12px; line-height:18px;">
+              FLOWR - Initiative Pipeline
+            </td>
+          </tr>
+        </table>
+        <!--[if mso]>
+        </td></tr></table>
+        <![endif]-->
+      </td>
+    </tr>
+  </table>
+</body>
+</html>"""
 
-
-    
-    Yes, understood. Only change patch() in src/resources/task/task.py. Your two creation cases already work.
-
-1. Immediately after fetching the original task:
-
-task = InitiativeTaskRepository.get_task_by_id(id)
-
-Add:
-
-was_team_assigned = task.get("is_team_assigned", False)
-previous_main_assessor = task.get("main_assessor")
-
-This remembers its state before the repository changes the flag.
-
-2. After your existing update, timeline and audit code, just before return task_updated, add:
-
-new_main_assessor = task_updated.get("main_assessor")
-if (
-    was_team_assigned
-    and previous_main_assessor is None
-    and new_main_assessor is not None
-):
-    try:
-        assigned_users = get_users_by_user_id([new_main_assessor])
-        if assigned_users and assigned_users[0].get("email"):
-            initiative = InitiativeRepository.get_by_ids(
-                [initiative_team_relationship.initiative_id],
-                False,
-            )[0]
-            send_email_task_assessor_assigned(
-                task_name=task_updated["task_name"],
-                recipients=assigned_users[0]["email"],
-                initiative_name=initiative.name,
-                initiative_id=initiative.id,
-                initiative_type=initiative.initiative_type,
-                initiative_link=(
-                    f"{INITIATIVE_BASE_URL.rstrip('/')}/{initiative.id}"
-                ),
-                tasks=[
-                    {
-                        "task_type": task_updated["task_type"],
-                        "task_name": task_updated["task_name"],
-                        "expected_for": (
-                            task_updated.get("expected_for")
-                            or "Not scheduled yet"
-                        ),
-                    }
-                ],
-            )
-    except Exception:
-        logging.exception(
-            "Failed to send task assignment email for task %s",
-            id,
+    op.execute(
+        sa.text(
+            """
+            INSERT INTO template
+                (locale, template_type, game_name, body, subject, description)
+            VALUES
+                (:locale, :template_type, :game_name, :body, :subject, :description)
+            """
+        ).bindparams(
+            locale="en_US",
+            template_type="initiative_status_changed_v1",
+            game_name="_",
+            body=body,
+            subject="{{ notification_subject }}",
+            description="Initiative hold, cancellation and reactivation notification",
         )
-return task_updated
+    )
 
-Replace INITIATIVE_BASE_URL with the actual configuration variable you already use for the working email link.
 
-Keep this block at the same indentation as your existing return task_updated, outside if can_edit_as_team_member and if "task_status" in payload.
+def downgrade():
+    op.execute(
+        sa.text(
+            """
+            DELETE FROM template
+            WHERE template_type = :template_type
+              AND locale = :locale
+              AND game_name = :game_name
+            """
+        ).bindparams(
+            template_type="initiative_status_changed_v1",
+            locale="en_US",
+            game_name="_",
+        )
+    )
 
-That adds exactly your case: previously team-assigned + no assessor → now an assessor selected → email that person. Saving again won’t trigger this condition.
+Apply that new migration to the database used by the target mailer environment before testing the new mail type. The runtime mailer code does not need a new rendering path.
+
+Step 2 — add a helper to the pipeline
+
+Add this function to src/util/email_helpers.py in flowr-initiative-pipeline. Reuse the existing mailer import used by send_email_task_assessor_assigned.
+
+The strings on_hold, canceled and reactivated below are notification events, not assumptions about the names of the initiative’s stored status values.
+
+def send_email_initiative_status_changed(
+    recipients,
+    *,
+    event,
+    initiative_name,
+    initiative_id,
+    initiative_type,
+    initiative_link,
+):
+    if event == "on_hold":
+        message = "The initiative you've been assigned to is on hold"
+        subject = "FLOWR - " + message
+    elif event == "canceled":
+        message = "The initiative you've been assigned to is canceled"
+        subject = "FLOWR - " + message
+    elif event == "reactivated":
+        message = f"The initiative {initiative_id} has been reactivated"
+        subject = f"FLOWR - Reactivation of the initiative {initiative_id}"
+    else:
+        raise ValueError(f"Unsupported initiative notification event: {event!r}")
+
+    if not recipients:
+        raise ValueError("At least one assessor recipient is required")
+
+    return mailer.send_mail_template(
+        recipients,
+        "initiative_status_changed_v1",
+        locale="en_US",
+        game_name="_",
+        injections={
+            "notification_subject": subject,
+            "notification_message": message,
+            "initiative_name": initiative_name,
+            "initiative_id": initiative_id,
+            "initiative_type": getattr(initiative_type, "value", initiative_type),
+            "initiative_url": initiative_link,
+        },
+    )
+
+The explicit game_name="_" preserves the working template lookup convention from the assignment-email fix.
+
+Step 3 — connect it to the initiative change
+
+Next, inspect the resource and repository methods called by On Hold, Cancel and Reactivate for an initiative. That source is needed to identify the stored state fields, the transaction boundary and the existing task/assessor queries. Do not insert this notification into the individual task-status PATCH simply because it also contains ON_HOLD and CANCELED values.
+
+At that integration point:
+
+1. Capture the previous initiative state before saving.
+2. Detect a real hold/cancel transition or a valid reactivation through the existing business logic.
+3. Resolve the assessors responsible for the initiative’s tasks using the actual assignment fields. Deduplicate recipients for this initiative event.
+4. After a successful state change, call the helper for each intended assessor using the appropriate event and current initiative details.
+5. For the link, reuse the working REMOTE_URL expression from the assignment email. If that setting contains only the frontend base address, the expression is f"{REMOTE_URL.rstrip('/')}/initiative/{initiative.id}".
+
+The ticket does not specify the recipient for a task that still has only a team assignment. Keep that as a business-rule question when wiring the recipient selection; do not silently treat the team mailbox as an individually assigned assessor.
+
+Validation and remaining work
+
+Python syntax, the three subject/message mappings, rejection of unsupported events, injection keys and the template lookup tuple were checked locally with mocks. No email was sent and no database was modified. Jinja rendering and Outlook appearance have not been tested here because the rendering dependency is unavailable in this workspace.
+
+The new migration still needs its project-generated revision header, the initiative endpoint still needs its trigger, and the end-to-end checks must be run in INT: hold, cancel, reactivation, unchanged-state save and an assessor with multiple tasks.
