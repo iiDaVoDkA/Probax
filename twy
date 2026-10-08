@@ -1,119 +1,14 @@
-Yes—let’s add logs only in flowr-initiative-pipeline, at each step of the call.
+python - <<'PY'
+from alembic import command
+from alembic.config import Config
 
-The existing 404 shows that an HTTP request reaches the mailer. A missing import would normally fail earlier, but we can check whether Python loads the expected helper and client files.
+cfg = Config("migrations/alembic.ini")
+cfg.set_main_option("script_location", "migrations")
+cfg.set_main_option("revision_environment", "false")
 
-Also, your colleague checked ENT, while the previous URL targeted INT. We’ll capture the actual destination in the logs.
-
-1. In src/resources/task/task.py
-
-Add these imports if missing:
-
-import inspect
-import logging
-
-Immediately before the existing send_email_task_assessor_assigned(...) call:
-
-logging.warning(
-    "[MAIL-DIAG task] file=%s helper_module=%s helper_file=%s",
-    __file__,
-    send_email_task_assessor_assigned.__module__,
-    inspect.getsourcefile(send_email_task_assessor_assigned),
+command.revision(
+    cfg,
+    message="add task assessor assigned email template",
+    autogenerate=False,
 )
-
-Keep the call unchanged. Immediately after it:
-
-logging.warning("[MAIL-DIAG task] email helper returned")
-
-Inside the existing email exception handler, use:
-
-logging.exception("[MAIL-DIAG task] assignment email failed")
-
-logging.exception() includes the traceback, which identifies the failing line. 
-
-2. In src/util/email_helpers.py
-
-Add import inspect and import logging if missing.
-
-Inside send_email_task_assessor_assigned, immediately before its return mailer.send_mail_template(...):
-
-logging.warning(
-    "[MAIL-DIAG helper] file=%s mailer_module=%s "
-    "mailer_file=%s function_file=%s injections_keys=%s "
-    "recipients_present=%s",
-    __file__,
-    mailer.__name__,
-    getattr(mailer, "__file__", None),
-    inspect.getsourcefile(mailer.send_mail_template),
-    sorted(injections),
-    bool(recipients),
-)
-
-This identifies the implementation Python actually imported. 
-
-3. In the pipeline’s utils/src/clients/mailer.py
-
-Inside send_mail_template(), before the existing if not config.MAILER_URL check, add:
-
-logging.warning(
-    "[MAIL-DIAG client] file=%s configured_url=%r "
-    "mail_type=%r locale=%r game_name=%r mailserver=%r",
-    __file__,
-    config.MAILER_URL,
-    mail_type,
-    locale,
-    game_name,
-    mailserver,
-)
-
-Immediately before the existing response = s.post(...):
-
-logging.warning(
-    "[MAIL-DIAG request] url=%r lookup=%r mail_infos=%r "
-    "has_attachment=%s",
-    url,
-    {
-        key: payload_send.get(key)
-        for key in ("mail_type", "locale", "game_name")
-    },
-    {"locale": (mail_dict or {}).get("locale")},
-    bool(files),
-)
-
-Immediately after that HTTP call, before response.raise_for_status(), add:
-
-logging.warning(
-    "[MAIL-DIAG response] status=%s final_url=%r "
-    "method=%s redirects=%r body=%r",
-    response.status_code,
-    response.url,
-    response.request.method,
-    [
-        (r.status_code, r.request.method, r.url)
-        for r in response.history
-    ],
-    response.text[:1000],
-)
-
-For the exact form fields attached to the final HTTP request, add this import:
-
-from urllib.parse import parse_qs
-
-Then, still before response.raise_for_status():
-
-content_type = response.request.headers.get("Content-Type", "")
-if content_type.startswith("application/x-www-form-urlencoded"):
-    sent_body = response.request.body or ""
-    if isinstance(sent_body, bytes):
-        sent_body = sent_body.decode("utf-8")
-    sent_fields = parse_qs(sent_body, keep_blank_values=True)
-    logging.warning(
-        "[MAIL-DIAG sent-form] lookup=%r",
-        {
-            key: sent_fields.get(key)
-            for key in ("mail_type", "locale", "game_name")
-        },
-    )
-
-Requests exposes the sent request and redirect history through these response attributes. 
-
-Restart your pipeline backend, trigger one personal assignment, and send the [MAIL-DIAG ...] lines plus any traceback. These logs will show the loaded files, selected template, destination, transmitted fields, and HTTP result.
+PY
